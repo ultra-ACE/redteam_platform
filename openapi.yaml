@@ -1,0 +1,6175 @@
+# Generated from the FastAPI runtime OpenAPI schema.
+# Refresh: cd backend && .venv\Scripts\python.exe scripts\export_openapi.py
+
+openapi: 3.1.0
+info:
+  title: 大模型安全评测系统 API
+  description: 大模型安全评测系统后端接口骨架。本服务默认监听本机，不包含登录、用户、角色权限和多租户。
+  version: 1.0.0
+paths:
+  /api/v1/health:
+    get:
+      tags:
+      - 系统
+      summary: Get Health
+      operationId: getHealth
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_HealthData_'
+  /api/v1/system-configs:
+    get:
+      tags:
+      - 系统
+      summary: List System Configs
+      operationId: listSystemConfigs
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_SystemConfig__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/system-configs/{config_key}:
+    patch:
+      tags:
+      - 系统
+      summary: Update System Config
+      operationId: updateSystemConfig
+      security:
+      - LocalToken: []
+      parameters:
+      - name: config_key
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Config Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemConfigUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_SystemConfig_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/audit-logs:
+    get:
+      tags:
+      - 系统
+      summary: List Audit Logs
+      operationId: listAuditLogs
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_AuditLog__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/benchmarks/import:
+    post:
+      tags:
+      - Benchmark
+      summary: Import Benchmark
+      operationId: importBenchmark
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_importBenchmark'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__Any__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - LocalToken: []
+  /api/v1/benchmarks:
+    get:
+      tags:
+      - Benchmark
+      summary: List Benchmarks
+      operationId: listBenchmarks
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_Benchmark__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/benchmarks/{benchmark_id}/versions:
+    get:
+      tags:
+      - Benchmark
+      summary: List Benchmark Versions
+      operationId: listBenchmarkVersions
+      security:
+      - LocalToken: []
+      parameters:
+      - name: benchmark_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Benchmark Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_BenchmarkVersion__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/test-cases:
+    get:
+      tags:
+      - 测试用例
+      summary: List Test Cases
+      operationId: listTestCases
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: benchmark_version_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Benchmark Version Id
+      - name: risk_category_code
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Category Code
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_TestCase__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/test-cases/{test_case_id}:
+    patch:
+      tags:
+      - 测试用例
+      summary: Update Test Case
+      operationId: updateTestCase
+      security:
+      - LocalToken: []
+      parameters:
+      - name: test_case_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Test Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestCaseUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_TestCase_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/risk-taxonomies:
+    get:
+      tags:
+      - 风险分类
+      summary: List Risk Taxonomies
+      operationId: listRiskTaxonomies
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_RiskTaxonomy__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 风险分类
+      summary: Create Risk Taxonomy
+      operationId: createRiskTaxonomy
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskTaxonomyCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_RiskTaxonomy_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/risk-taxonomies/{taxonomy_id}/categories:
+    get:
+      tags:
+      - 风险分类
+      summary: List Risk Categories
+      operationId: listRiskCategories
+      security:
+      - LocalToken: []
+      parameters:
+      - name: taxonomy_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Taxonomy Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_list_RiskCategory__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 风险分类
+      summary: Create Risk Category
+      operationId: createRiskCategory
+      security:
+      - LocalToken: []
+      parameters:
+      - name: taxonomy_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Taxonomy Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskCategoryCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_RiskCategory_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/benchmark-versions/{benchmark_version_id}/risk-mappings/batch:
+    post:
+      tags:
+      - 风险分类
+      summary: Batch Upsert Risk Mappings
+      operationId: batchUpsertRiskMappings
+      security:
+      - LocalToken: []
+      parameters:
+      - name: benchmark_version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Benchmark Version Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskMappingBatchRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_RiskMappingBatchResult_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/benchmark-versions/{benchmark_version_id}/mapping-status:
+    get:
+      tags:
+      - 风险分类
+      summary: Get Risk Mapping Status
+      operationId: getRiskMappingStatus
+      security:
+      - LocalToken: []
+      parameters:
+      - name: benchmark_version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Benchmark Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_RiskMappingStatus_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/task-attempts/{attempt_id}/risk:
+    get:
+      tags:
+      - 风险量化
+      summary: Get Task Attempt Risk
+      operationId: getTaskAttemptRisk
+      security:
+      - LocalToken: []
+      parameters:
+      - name: attempt_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Attempt Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_RiskAssessment_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/risk-summary:
+    get:
+      tags:
+      - 风险量化
+      summary: Get Risk Summary
+      operationId: getRiskSummary
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      - name: risk_level
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Level
+      - name: risk_category_code
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Category Code
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__Any__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/models:
+    get:
+      tags:
+      - 模型
+      summary: List Models
+      operationId: listModels
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: usage_scope
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Usage Scope
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_Model__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 模型
+      summary: Create Model
+      operationId: createModel
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Model_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/models/{model_id}/health-check:
+    post:
+      tags:
+      - 模型
+      summary: Check Model Health
+      operationId: checkModelHealth
+      security:
+      - LocalToken: []
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Model Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_HealthCheckData_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-methods:
+    get:
+      tags:
+      - 攻击方法
+      summary: List Attack Methods
+      operationId: listAttackMethods
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_AttackMethod__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 攻击方法
+      summary: Create Attack Method
+      operationId: createAttackMethod
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackMethodCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackMethod_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-methods/{method_id}:
+    patch:
+      tags:
+      - 攻击方法
+      summary: Update Attack Method
+      operationId: updateAttackMethod
+      security:
+      - LocalToken: []
+      parameters:
+      - name: method_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Method Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackMethodUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackMethod_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - 攻击方法
+      summary: Disable Attack Method
+      operationId: disableAttackMethod
+      security:
+      - LocalToken: []
+      parameters:
+      - name: method_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Method Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackMethod_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-templates:
+    get:
+      tags:
+      - 攻击模板
+      summary: List Attack Templates
+      operationId: listAttackTemplates
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: attack_method_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Attack Method Id
+      - name: name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_AttackTemplate__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 攻击模板
+      summary: Create Attack Template
+      operationId: createAttackTemplate
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackTemplateCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-templates/{template_id}:
+    get:
+      tags:
+      - 攻击模板
+      summary: Get Attack Template
+      operationId: getAttackTemplate
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - 攻击模板
+      summary: Update Attack Template
+      operationId: updateAttackTemplate
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackTemplateUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - 攻击模板
+      summary: Disable Attack Template
+      operationId: disableAttackTemplate
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-templates/{template_id}/validate:
+    post:
+      tags:
+      - 攻击模板
+      summary: Validate Attack Template
+      operationId: validateAttackTemplate
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplateValidationResult_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-templates/{template_id}/preview:
+    post:
+      tags:
+      - 攻击模板
+      summary: Preview Attack Template
+      operationId: previewAttackTemplate
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackTemplatePreviewRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplatePreviewResult_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-templates/{template_id}/versions:
+    get:
+      tags:
+      - 攻击模板
+      summary: List Attack Template Versions
+      operationId: listAttackTemplateVersions
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_list_AttackTemplate__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 攻击模板
+      summary: Create Attack Template Version
+      operationId: createAttackTemplateVersion
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttackTemplateVersionCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/attack-templates/{template_id}/publish:
+    post:
+      tags:
+      - 攻击模板
+      summary: Publish Attack Template Version
+      operationId: publishAttackTemplateVersion
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttackTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks:
+    post:
+      tags:
+      - 评测任务
+      summary: Create Evaluation Task
+      operationId: createEvaluationTask
+      security:
+      - LocalToken: []
+      parameters:
+      - name: X-Operator
+        in: header
+        required: false
+        schema:
+          type: string
+          default: local
+          title: X-Operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationTaskCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_EvaluationTask_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - 评测任务
+      summary: List Evaluation Tasks
+      operationId: listEvaluationTasks
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: benchmark_version_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Benchmark Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_EvaluationTask__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/status:
+    get:
+      tags:
+      - 评测任务
+      summary: Get Evaluation Task Status
+      operationId: getEvaluationTaskStatus
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_TaskStatusData_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/results:
+    get:
+      tags:
+      - 评测任务
+      summary: List Evaluation Results
+      operationId: listEvaluationResults
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: sort
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sort
+      - name: risk_level
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Level
+      - name: needs_review
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Needs Review
+      - name: model_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Model Id
+      - name: attack_template_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Attack Template Id
+      - name: risk_category_code
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Category Code
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_EvaluationResult__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/actions/start:
+    post:
+      tags:
+      - 评测任务
+      summary: Start Evaluation Task
+      operationId: startEvaluationTask
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_TaskActionData_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/actions/cancel:
+    post:
+      tags:
+      - 评测任务
+      summary: Cancel Evaluation Task
+      operationId: cancelEvaluationTask
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_TaskActionData_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/actions/retry-failed:
+    post:
+      tags:
+      - 评测任务
+      summary: Retry Failed Evaluation Cases
+      operationId: retryFailedEvaluationCases
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_RetryFailedData_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/statistics:
+    get:
+      tags:
+      - 统计分析
+      summary: Get Evaluation Task Statistics
+      operationId: getEvaluationTaskStatistics
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Statistics_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/events:
+    get:
+      tags:
+      - 评测任务
+      summary: Stream Evaluation Task Events
+      operationId: streamEvaluationTaskEvents
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/judge-profiles:
+    get:
+      tags:
+      - Judge
+      summary: List Judge Profiles
+      operationId: listJudgeProfiles
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: judge_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeType'
+          - type: 'null'
+          title: Judge Type
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_JudgeProfile__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - Judge
+      summary: Create Judge Profile
+      operationId: createJudgeProfile
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JudgeProfileCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_JudgeProfile_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/judge-profiles/{profile_id}:
+    get:
+      tags:
+      - Judge
+      summary: Get Judge Profile
+      operationId: getJudgeProfile
+      security:
+      - LocalToken: []
+      parameters:
+      - name: profile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Profile Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_JudgeProfile_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - Judge
+      summary: Update Judge Profile
+      operationId: updateJudgeProfile
+      security:
+      - LocalToken: []
+      parameters:
+      - name: profile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Profile Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JudgeProfileUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_JudgeProfile_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - Judge
+      summary: Disable Judge Profile
+      operationId: disableJudgeProfile
+      security:
+      - LocalToken: []
+      parameters:
+      - name: profile_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Profile Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_JudgeProfile_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evaluation-tasks/{task_id}/judge-trust:
+    get:
+      tags:
+      - Judge
+      summary: Get Judge Trust
+      operationId: getJudgeTrust
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_JudgeTrustSummary_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/judge-results/{judge_result_id}/re-evaluate:
+    post:
+      tags:
+      - Judge
+      summary: Re Evaluate Judge Result
+      operationId: reEvaluateJudgeResult
+      security:
+      - LocalToken: []
+      parameters:
+      - name: judge_result_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Judge Result Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_JudgeReEvaluateResult_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/manual-reviews:
+    get:
+      tags:
+      - 人工复核
+      summary: List Manual Reviews
+      operationId: listManualReviews
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      - name: trigger_reason
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Trigger Reason
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Id
+      - name: task_attempt_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Attempt Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_ManualReview__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 人工复核
+      summary: Create Manual Review
+      operationId: createManualReview
+      security:
+      - LocalToken: []
+      parameters:
+      - name: X-Operator
+        in: header
+        required: false
+        schema:
+          type: string
+          default: local
+          title: X-Operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualReviewCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ManualReviewDetail_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/manual-reviews/{review_id}:
+    get:
+      tags:
+      - 人工复核
+      summary: Get Manual Review
+      operationId: getManualReview
+      security:
+      - LocalToken: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Review Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ManualReviewDetail_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    patch:
+      tags:
+      - 人工复核
+      summary: Update Manual Review
+      operationId: updateManualReview
+      security:
+      - LocalToken: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Review Id
+      - name: X-Operator
+        in: header
+        required: false
+        schema:
+          type: string
+          default: local
+          title: X-Operator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualReviewUpdateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ManualReviewDetail_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/reports:
+    post:
+      tags:
+      - 报告
+      summary: Create Report
+      operationId: createReport
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportCreateRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Report_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - LocalToken: []
+  /api/v1/reports/{report_id}:
+    get:
+      tags:
+      - 报告
+      summary: Get Report
+      operationId: getReport
+      security:
+      - LocalToken: []
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_Report_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/reports/{report_id}/download:
+    get:
+      tags:
+      - 报告
+      summary: Download Report
+      operationId: downloadReport
+      security:
+      - LocalToken: []
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Report Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report-templates:
+    get:
+      tags:
+      - 报告模板
+      summary: List Report Templates
+      operationId: listReportTemplates
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_ReportTemplate__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 报告模板
+      summary: Create Report Template
+      operationId: createReportTemplate
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportTemplateCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ReportTemplate_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report-templates/{template_id}/versions:
+    get:
+      tags:
+      - 报告模板
+      summary: List Report Template Versions
+      operationId: listReportTemplateVersions
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_ReportTemplateVersion__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 报告模板
+      summary: Create Report Template Version
+      operationId: createReportTemplateVersion
+      security:
+      - LocalToken: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Template Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportTemplateVersionCreateRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ReportTemplateVersion_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report-template-versions/{version_id}:
+    get:
+      tags:
+      - 报告模板
+      summary: Get Report Template Version
+      operationId: getReportTemplateVersion
+      security:
+      - LocalToken: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ReportTemplateVersion_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/report-template-versions/{version_id}/publish:
+    post:
+      tags:
+      - 报告模板
+      summary: Publish Report Template Version
+      operationId: publishReportTemplateVersion
+      security:
+      - LocalToken: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_ReportTemplateVersion_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/files:
+    get:
+      tags:
+      - 文件
+      summary: List Files
+      operationId: listFiles
+      security:
+      - LocalToken: []
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+          title: Page
+      - name: page_size
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 20
+          title: Page Size
+      - name: owner_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Type
+      - name: owner_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Owner Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_PaginatedData_StoredFile__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - 文件
+      summary: Upload File
+      operationId: uploadFile
+      security:
+      - LocalToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_uploadFile'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_StoredFile_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/files/{file_id}:
+    get:
+      tags:
+      - 文件
+      summary: Get File
+      operationId: getFile
+      security:
+      - LocalToken: []
+      parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: File Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_StoredFile_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/files/{file_id}/download:
+    get:
+      tags:
+      - 文件
+      summary: Download File
+      operationId: downloadFile
+      security:
+      - LocalToken: []
+      parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: File Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    ApiResponse_AttackMethod_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/AttackMethod'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[AttackMethod]
+    ApiResponse_AttackTemplatePreviewResult_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/AttackTemplatePreviewResult'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[AttackTemplatePreviewResult]
+    ApiResponse_AttackTemplateValidationResult_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/AttackTemplateValidationResult'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[AttackTemplateValidationResult]
+    ApiResponse_AttackTemplate_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/AttackTemplate'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[AttackTemplate]
+    ApiResponse_EvaluationTask_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/EvaluationTask'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[EvaluationTask]
+    ApiResponse_HealthCheckData_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/HealthCheckData'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[HealthCheckData]
+    ApiResponse_HealthData_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/HealthData'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[HealthData]
+    ApiResponse_JudgeProfile_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeProfile'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[JudgeProfile]
+    ApiResponse_JudgeReEvaluateResult_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeReEvaluateResult'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[JudgeReEvaluateResult]
+    ApiResponse_JudgeTrustSummary_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeTrustSummary'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[JudgeTrustSummary]
+    ApiResponse_ManualReviewDetail_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/ManualReviewDetail'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[ManualReviewDetail]
+    ApiResponse_Model_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/Model'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[Model]
+    ApiResponse_PaginatedData_AttackMethod__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_AttackMethod_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[AttackMethod]]
+    ApiResponse_PaginatedData_AttackTemplate__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_AttackTemplate_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[AttackTemplate]]
+    ApiResponse_PaginatedData_AuditLog__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_AuditLog_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[AuditLog]]
+    ApiResponse_PaginatedData_BenchmarkVersion__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_BenchmarkVersion_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[BenchmarkVersion]]
+    ApiResponse_PaginatedData_Benchmark__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_Benchmark_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[Benchmark]]
+    ApiResponse_PaginatedData_EvaluationResult__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_EvaluationResult_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[EvaluationResult]]
+    ApiResponse_PaginatedData_EvaluationTask__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_EvaluationTask_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[EvaluationTask]]
+    ApiResponse_PaginatedData_JudgeProfile__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_JudgeProfile_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[JudgeProfile]]
+    ApiResponse_PaginatedData_ManualReview__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_ManualReview_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[ManualReview]]
+    ApiResponse_PaginatedData_Model__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_Model_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[Model]]
+    ApiResponse_PaginatedData_ReportTemplateVersion__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_ReportTemplateVersion_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[ReportTemplateVersion]]
+    ApiResponse_PaginatedData_ReportTemplate__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_ReportTemplate_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[ReportTemplate]]
+    ApiResponse_PaginatedData_RiskTaxonomy__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_RiskTaxonomy_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[RiskTaxonomy]]
+    ApiResponse_PaginatedData_StoredFile__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_StoredFile_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[StoredFile]]
+    ApiResponse_PaginatedData_SystemConfig__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_SystemConfig_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[SystemConfig]]
+    ApiResponse_PaginatedData_TestCase__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/PaginatedData_TestCase_'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[PaginatedData[TestCase]]
+    ApiResponse_ReportTemplateVersion_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/ReportTemplateVersion'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[ReportTemplateVersion]
+    ApiResponse_ReportTemplate_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/ReportTemplate'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[ReportTemplate]
+    ApiResponse_Report_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/Report'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[Report]
+    ApiResponse_RetryFailedData_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/RetryFailedData'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[RetryFailedData]
+    ApiResponse_RiskAssessment_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/RiskAssessment'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[RiskAssessment]
+    ApiResponse_RiskCategory_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/RiskCategory'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[RiskCategory]
+    ApiResponse_RiskMappingBatchResult_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/RiskMappingBatchResult'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[RiskMappingBatchResult]
+    ApiResponse_RiskMappingStatus_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/RiskMappingStatus'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[RiskMappingStatus]
+    ApiResponse_RiskTaxonomy_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/RiskTaxonomy'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[RiskTaxonomy]
+    ApiResponse_Statistics_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/Statistics'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[Statistics]
+    ApiResponse_StoredFile_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/StoredFile'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[StoredFile]
+    ApiResponse_SystemConfig_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/SystemConfig'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[SystemConfig]
+    ApiResponse_TaskActionData_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/TaskActionData'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[TaskActionData]
+    ApiResponse_TaskStatusData_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/TaskStatusData'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[TaskStatusData]
+    ApiResponse_TestCase_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/TestCase'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[TestCase]
+    ApiResponse_dict_str__Any__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[dict[str, Any]]
+    ApiResponse_list_AttackTemplate__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/AttackTemplate'
+            type: array
+          - type: 'null'
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[list[AttackTemplate]]
+    ApiResponse_list_RiskCategory__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/RiskCategory'
+            type: array
+          - type: 'null'
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[list[RiskCategory]]
+    AttackMethod:
+      properties:
+        attack_method_id:
+          type: integer
+          title: Attack Method Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        risk_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Notes
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - attack_method_id
+      - code
+      - name
+      title: AttackMethod
+    AttackMethodCreateRequest:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        risk_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Notes
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - code
+      - name
+      title: AttackMethodCreateRequest
+    AttackMethodUpdateRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        category:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        risk_notes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Risk Notes
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: AttackMethodUpdateRequest
+    AttackTemplate:
+      properties:
+        attack_template_id:
+          type: integer
+          title: Attack Template Id
+        attack_method_id:
+          type: integer
+          title: Attack Method Id
+        name:
+          type: string
+          title: Name
+        template_text:
+          type: string
+          title: Template Text
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        version:
+          type: string
+          title: Version
+          default: v1
+        status:
+          type: string
+          title: Status
+          default: active
+      type: object
+      required:
+      - attack_template_id
+      - attack_method_id
+      - name
+      - template_text
+      title: AttackTemplate
+    AttackTemplateCreateRequest:
+      properties:
+        attack_method_id:
+          type: integer
+          title: Attack Method Id
+        name:
+          type: string
+          title: Name
+        template_text:
+          type: string
+          title: Template Text
+        variables:
+          items:
+            type: string
+          type: array
+          title: Variables
+        version:
+          type: string
+          title: Version
+          default: v1
+        status:
+          type: string
+          title: Status
+          default: active
+      type: object
+      required:
+      - attack_method_id
+      - name
+      - template_text
+      title: AttackTemplateCreateRequest
+    AttackTemplatePreviewRequest:
+      properties:
+        variables:
+          additionalProperties: true
+          type: object
+          title: Variables
+      type: object
+      title: AttackTemplatePreviewRequest
+    AttackTemplatePreviewResult:
+      properties:
+        valid:
+          type: boolean
+          title: Valid
+          default: false
+        detected_variables:
+          items:
+            type: string
+          type: array
+          title: Detected Variables
+        missing_variables:
+          items:
+            type: string
+          type: array
+          title: Missing Variables
+        unused_variables:
+          items:
+            type: string
+          type: array
+          title: Unused Variables
+        undeclared_variables:
+          items:
+            type: string
+          type: array
+          title: Undeclared Variables
+        rendered_prompt:
+          type: string
+          title: Rendered Prompt
+          default: ''
+      type: object
+      title: AttackTemplatePreviewResult
+    AttackTemplateUpdateRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        template_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Template Text
+        variables:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Variables
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      title: AttackTemplateUpdateRequest
+    AttackTemplateValidationResult:
+      properties:
+        valid:
+          type: boolean
+          title: Valid
+          default: false
+        detected_variables:
+          items:
+            type: string
+          type: array
+          title: Detected Variables
+        missing_variables:
+          items:
+            type: string
+          type: array
+          title: Missing Variables
+        unused_variables:
+          items:
+            type: string
+          type: array
+          title: Unused Variables
+        undeclared_variables:
+          items:
+            type: string
+          type: array
+          title: Undeclared Variables
+      type: object
+      title: AttackTemplateValidationResult
+    AttackTemplateVersionCreateRequest:
+      properties:
+        version:
+          type: string
+          title: Version
+        template_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Template Text
+        variables:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Variables
+        status:
+          type: string
+          title: Status
+          default: draft
+      type: object
+      required:
+      - version
+      title: AttackTemplateVersionCreateRequest
+    AttemptStatus:
+      type: string
+      enum:
+      - pending
+      - running
+      - succeeded
+      - failed
+      - timeout
+      - cancelled
+      title: AttemptStatus
+    AuditLog:
+      properties:
+        audit_id:
+          type: integer
+          title: Audit Id
+        actor:
+          type: string
+          title: Actor
+        action:
+          type: string
+          title: Action
+        resource_type:
+          type: string
+          title: Resource Type
+        resource_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Resource Id
+        before_data:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Before Data
+        after_data:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: After Data
+        request_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Id
+        ip:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Ip
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - audit_id
+      - actor
+      - action
+      - resource_type
+      title: AuditLog
+    Benchmark:
+      properties:
+        benchmark_id:
+          type: integer
+          title: Benchmark Id
+        name:
+          type: string
+          title: Name
+        slug:
+          type: string
+          title: Slug
+        source_type:
+          type: string
+          title: Source Type
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        status:
+          type: string
+          title: Status
+          default: active
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - benchmark_id
+      - name
+      - slug
+      - source_type
+      title: Benchmark
+    BenchmarkVersion:
+      properties:
+        benchmark_version_id:
+          type: integer
+          title: Benchmark Version Id
+        benchmark_id:
+          type: integer
+          title: Benchmark Id
+        version:
+          type: string
+          title: Version
+        source_file_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Source File Id
+        case_count:
+          type: integer
+          title: Case Count
+          default: 0
+        checksum:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checksum
+        status:
+          type: string
+          title: Status
+          default: ready
+        imported_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Imported At
+      type: object
+      required:
+      - benchmark_version_id
+      - benchmark_id
+      - version
+      title: BenchmarkVersion
+    Body_importBenchmark:
+      properties:
+        name:
+          type: string
+          title: Name
+        version:
+          type: string
+          title: Version
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+        risk_taxonomy_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Risk Taxonomy Id
+      type: object
+      required:
+      - name
+      - version
+      - file
+      title: Body_importBenchmark
+    Body_uploadFile:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+        owner_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Type
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Owner Id
+      type: object
+      required:
+      - file
+      title: Body_uploadFile
+    EvaluationResult:
+      properties:
+        attempt_id:
+          type: integer
+          title: Attempt Id
+        task_case_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Case Id
+        test_case_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Test Case Id
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        model_id:
+          type: integer
+          title: Model Id
+        attack_template_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Attack Template Id
+        status:
+          $ref: '#/components/schemas/AttemptStatus'
+        model_output_excerpt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Output Excerpt
+        normalized_risk_categories:
+          items:
+            $ref: '#/components/schemas/RiskCategoryRef'
+          type: array
+          title: Normalized Risk Categories
+        judge:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeSummary'
+          - type: 'null'
+        rule_validation:
+          anyOf:
+          - $ref: '#/components/schemas/RuleValidationSummary'
+          - type: 'null'
+        risk:
+          anyOf:
+          - $ref: '#/components/schemas/RiskSummary'
+          - type: 'null'
+        manual_review_status:
+          type: string
+          title: Manual Review Status
+          default: none
+      type: object
+      required:
+      - attempt_id
+      - model_id
+      - status
+      title: EvaluationResult
+    EvaluationTask:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        name:
+          type: string
+          title: Name
+        benchmark_version_id:
+          type: integer
+          title: Benchmark Version Id
+        risk_taxonomy_id:
+          type: integer
+          title: Risk Taxonomy Id
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        progress:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Progress
+          default: 0
+        total_cases:
+          type: integer
+          title: Total Cases
+          default: 0
+        completed_cases:
+          type: integer
+          title: Completed Cases
+          default: 0
+        failed_cases:
+          type: integer
+          title: Failed Cases
+          default: 0
+        cancel_requested:
+          type: boolean
+          title: Cancel Requested
+          default: false
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Finished At
+      type: object
+      required:
+      - task_id
+      - name
+      - benchmark_version_id
+      - risk_taxonomy_id
+      - status
+      title: EvaluationTask
+    EvaluationTaskCreateRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        benchmark_version_id:
+          type: integer
+          title: Benchmark Version Id
+        risk_taxonomy_id:
+          type: integer
+          title: Risk Taxonomy Id
+        model_bindings:
+          items:
+            $ref: '#/components/schemas/ModelBinding'
+          type: array
+          title: Model Bindings
+        attack_template_ids:
+          items:
+            type: integer
+          type: array
+          title: Attack Template Ids
+        judge_profile_ids:
+          items:
+            type: integer
+          type: array
+          title: Judge Profile Ids
+        rule_set_ids:
+          items:
+            type: integer
+          type: array
+          title: Rule Set Ids
+        execution:
+          $ref: '#/components/schemas/ExecutionConfig'
+        scoring:
+          $ref: '#/components/schemas/ScoringConfig'
+        priority:
+          type: string
+          title: Priority
+          default: normal
+      type: object
+      required:
+      - name
+      - benchmark_version_id
+      - risk_taxonomy_id
+      - model_bindings
+      - judge_profile_ids
+      - rule_set_ids
+      - execution
+      - scoring
+      title: EvaluationTaskCreateRequest
+    ExecutionConfig:
+      properties:
+        repeat:
+          type: integer
+          minimum: 1.0
+          title: Repeat
+          default: 1
+        timeout_seconds:
+          type: integer
+          minimum: 1.0
+          title: Timeout Seconds
+          default: 120
+        retry:
+          $ref: '#/components/schemas/RetryConfig'
+        concurrency:
+          type: integer
+          minimum: 1.0
+          title: Concurrency
+          default: 4
+      type: object
+      title: ExecutionConfig
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthCheckData:
+      properties:
+        model_id:
+          type: integer
+          title: Model Id
+        status:
+          type: string
+          title: Status
+          default: healthy
+        latency_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Latency Ms
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+      type: object
+      required:
+      - model_id
+      title: HealthCheckData
+    HealthData:
+      properties:
+        status:
+          type: string
+          title: Status
+          default: healthy
+        database:
+          type: string
+          title: Database
+          default: up
+        redis:
+          type: string
+          title: Redis
+          default: up
+        storage:
+          type: string
+          title: Storage
+          default: up
+        version:
+          type: string
+          title: Version
+          default: 1.0.0
+      type: object
+      title: HealthData
+    JudgeProfile:
+      properties:
+        judge_profile_id:
+          type: integer
+          title: Judge Profile Id
+        name:
+          type: string
+          title: Name
+        judge_type:
+          $ref: '#/components/schemas/JudgeType'
+        judge_model_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Judge Model Id
+        strategy:
+          type: string
+          title: Strategy
+        prompt_template:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt Template
+        params:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Params
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - judge_profile_id
+      - name
+      - judge_type
+      - strategy
+      title: JudgeProfile
+    JudgeProfileCreateRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        judge_type:
+          $ref: '#/components/schemas/JudgeType'
+        judge_model_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Judge Model Id
+        strategy:
+          type: string
+          title: Strategy
+        prompt_template:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt Template
+        params:
+          additionalProperties: true
+          type: object
+          title: Params
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - name
+      - judge_type
+      - strategy
+      title: JudgeProfileCreateRequest
+    JudgeProfileUpdateRequest:
+      properties:
+        name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+        judge_type:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeType'
+          - type: 'null'
+        judge_model_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Judge Model Id
+        strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Strategy
+        prompt_template:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt Template
+        params:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Params
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: JudgeProfileUpdateRequest
+    JudgeReEvaluateResult:
+      properties:
+        judge_result_id:
+          type: integer
+          title: Judge Result Id
+        status:
+          type: string
+          title: Status
+        verdict:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verdict
+        trust_score:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Trust Score
+      type: object
+      required:
+      - judge_result_id
+      - status
+      title: JudgeReEvaluateResult
+    JudgeSummary:
+      properties:
+        verdict:
+          $ref: '#/components/schemas/JudgeVerdict'
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        trust_score:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Trust Score
+      type: object
+      required:
+      - verdict
+      - confidence
+      - trust_score
+      title: JudgeSummary
+    JudgeTrustSummary:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        average_trust_score:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Average Trust Score
+        low_trust_count:
+          type: integer
+          title: Low Trust Count
+          default: 0
+        rule_conflict_count:
+          type: integer
+          title: Rule Conflict Count
+          default: 0
+        manual_review_count:
+          type: integer
+          title: Manual Review Count
+          default: 0
+      type: object
+      required:
+      - task_id
+      - average_trust_score
+      title: JudgeTrustSummary
+    JudgeType:
+      type: string
+      enum:
+      - model
+      - rule
+      - ensemble
+      title: JudgeType
+    JudgeVerdict:
+      type: string
+      enum:
+      - safe
+      - unsafe
+      - uncertain
+      title: JudgeVerdict
+    ManualReview:
+      properties:
+        review_id:
+          type: integer
+          title: Review Id
+        task_attempt_id:
+          type: integer
+          title: Task Attempt Id
+        trigger_reason:
+          type: string
+          title: Trigger Reason
+        status:
+          $ref: '#/components/schemas/ReviewStatus'
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewDecision'
+          - type: 'null'
+        corrected_category_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Corrected Category Id
+        original_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Original Score
+        corrected_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Corrected Score
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+        reviewer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewer
+        reviewed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Reviewed At
+      type: object
+      required:
+      - review_id
+      - task_attempt_id
+      - trigger_reason
+      - status
+      title: ManualReview
+    ManualReviewCreateRequest:
+      properties:
+        task_attempt_id:
+          type: integer
+          title: Task Attempt Id
+        trigger_reason:
+          type: string
+          title: Trigger Reason
+        decision:
+          $ref: '#/components/schemas/ReviewDecision'
+        corrected_category_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Corrected Category Id
+        corrected_score:
+          anyOf:
+          - type: number
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Corrected Score
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+      type: object
+      required:
+      - task_attempt_id
+      - trigger_reason
+      - decision
+      title: ManualReviewCreateRequest
+    ManualReviewDetail:
+      properties:
+        review_id:
+          type: integer
+          title: Review Id
+        task_attempt_id:
+          type: integer
+          title: Task Attempt Id
+        trigger_reason:
+          type: string
+          title: Trigger Reason
+        status:
+          $ref: '#/components/schemas/ReviewStatus'
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/ReviewDecision'
+          - type: 'null'
+        corrected_category_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Corrected Category Id
+        original_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Original Score
+        corrected_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Corrected Score
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+        reviewer:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reviewer
+        reviewed_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Reviewed At
+        task_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Id
+        test_case_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Test Case Id
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
+        model_output:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Output
+        judge_verdict:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Judge Verdict
+        judge_confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Judge Confidence
+        judge_trust_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Judge Trust Score
+        rule_hits:
+          type: integer
+          title: Rule Hits
+          default: 0
+        rule_highest_severity:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Highest Severity
+        original_risk_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Original Risk Score
+        original_risk_level:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Original Risk Level
+      type: object
+      required:
+      - review_id
+      - task_attempt_id
+      - trigger_reason
+      - status
+      title: ManualReviewDetail
+    ManualReviewUpdateRequest:
+      properties:
+        decision:
+          $ref: '#/components/schemas/ReviewDecision'
+        corrected_category_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Corrected Category Id
+        corrected_score:
+          anyOf:
+          - type: number
+            maximum: 100.0
+            minimum: 0.0
+          - type: 'null'
+          title: Corrected Score
+        comment:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Comment
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      required:
+      - decision
+      title: ManualReviewUpdateRequest
+    Model:
+      properties:
+        model_id:
+          type: integer
+          title: Model Id
+        name:
+          type: string
+          title: Name
+        provider:
+          type: string
+          title: Provider
+        adapter_type:
+          $ref: '#/components/schemas/ModelAdapter'
+        base_url:
+          type: string
+          title: Base Url
+        model_name:
+          type: string
+          title: Model Name
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
+        usage_scope:
+          $ref: '#/components/schemas/ModelUsageScope'
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - model_id
+      - name
+      - provider
+      - adapter_type
+      - base_url
+      - model_name
+      - usage_scope
+      title: Model
+    ModelAdapter:
+      type: string
+      enum:
+      - openai_compatible
+      - ollama
+      - custom_http
+      - mock
+      title: ModelAdapter
+    ModelBinding:
+      properties:
+        model_id:
+          type: integer
+          title: Model Id
+        role:
+          type: string
+          title: Role
+          default: target
+        model_params:
+          additionalProperties: true
+          type: object
+          title: Model Params
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - model_id
+      title: ModelBinding
+    ModelCreateRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        provider:
+          type: string
+          title: Provider
+        adapter_type:
+          $ref: '#/components/schemas/ModelAdapter'
+        base_url:
+          type: string
+          title: Base Url
+        model_name:
+          type: string
+          title: Model Name
+        secret_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Secret Ref
+        default_params:
+          additionalProperties: true
+          type: object
+          title: Default Params
+        usage_scope:
+          $ref: '#/components/schemas/ModelUsageScope'
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - name
+      - provider
+      - adapter_type
+      - base_url
+      - model_name
+      - usage_scope
+      title: ModelCreateRequest
+    ModelUsageScope:
+      type: string
+      enum:
+      - target
+      - judge
+      - both
+      title: ModelUsageScope
+    PaginatedData_AttackMethod_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AttackMethod'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[AttackMethod]
+    PaginatedData_AttackTemplate_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AttackTemplate'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[AttackTemplate]
+    PaginatedData_AuditLog_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AuditLog'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[AuditLog]
+    PaginatedData_BenchmarkVersion_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/BenchmarkVersion'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[BenchmarkVersion]
+    PaginatedData_Benchmark_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Benchmark'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[Benchmark]
+    PaginatedData_EvaluationResult_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/EvaluationResult'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[EvaluationResult]
+    PaginatedData_EvaluationTask_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/EvaluationTask'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[EvaluationTask]
+    PaginatedData_JudgeProfile_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/JudgeProfile'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[JudgeProfile]
+    PaginatedData_ManualReview_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ManualReview'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[ManualReview]
+    PaginatedData_Model_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/Model'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[Model]
+    PaginatedData_ReportTemplateVersion_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ReportTemplateVersion'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[ReportTemplateVersion]
+    PaginatedData_ReportTemplate_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ReportTemplate'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[ReportTemplate]
+    PaginatedData_RiskTaxonomy_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/RiskTaxonomy'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[RiskTaxonomy]
+    PaginatedData_StoredFile_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/StoredFile'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[StoredFile]
+    PaginatedData_SystemConfig_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/SystemConfig'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[SystemConfig]
+    PaginatedData_TestCase_:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/TestCase'
+          type: array
+          title: Items
+        page:
+          type: integer
+          minimum: 1.0
+          title: Page
+          default: 1
+        page_size:
+          type: integer
+          maximum: 200.0
+          minimum: 1.0
+          title: Page Size
+          default: 20
+        total:
+          type: integer
+          minimum: 0.0
+          title: Total
+          default: 0
+        has_next:
+          type: boolean
+          title: Has Next
+          default: false
+      type: object
+      title: PaginatedData[TestCase]
+    Report:
+      properties:
+        report_id:
+          type: integer
+          title: Report Id
+        task_id:
+          type: integer
+          title: Task Id
+        template_version_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Template Version Id
+        report_type:
+          type: string
+          title: Report Type
+        format:
+          $ref: '#/components/schemas/ReportFormat'
+        status:
+          $ref: '#/components/schemas/ReportStatus'
+        file_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: File Id
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Finished At
+      type: object
+      required:
+      - report_id
+      - task_id
+      - report_type
+      - format
+      - status
+      title: Report
+    ReportCreateRequest:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        report_type:
+          type: string
+          title: Report Type
+        format:
+          $ref: '#/components/schemas/ReportFormat'
+        template_version_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Template Version Id
+        include:
+          items:
+            type: string
+          type: array
+          title: Include
+        filters:
+          additionalProperties: true
+          type: object
+          title: Filters
+      type: object
+      required:
+      - task_id
+      - report_type
+      - format
+      title: ReportCreateRequest
+    ReportFormat:
+      type: string
+      enum:
+      - json
+      - md
+      - csv
+      - html
+      - pdf
+      title: ReportFormat
+    ReportStatus:
+      type: string
+      enum:
+      - queued
+      - generating
+      - ready
+      - failed
+      title: ReportStatus
+    ReportTemplate:
+      properties:
+        template_id:
+          type: integer
+          title: Template Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        status:
+          type: string
+          title: Status
+          default: active
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - template_id
+      - code
+      - name
+      title: ReportTemplate
+    ReportTemplateCreateRequest:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+      type: object
+      required:
+      - code
+      - name
+      title: ReportTemplateCreateRequest
+    ReportTemplateVersion:
+      properties:
+        template_version_id:
+          type: integer
+          title: Template Version Id
+        template_id:
+          type: integer
+          title: Template Id
+        version:
+          type: string
+          title: Version
+        format:
+          type: string
+          title: Format
+        content:
+          type: string
+          title: Content
+        variables_schema:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Variables Schema
+        status:
+          type: string
+          title: Status
+          default: draft
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - template_version_id
+      - template_id
+      - version
+      - format
+      - content
+      title: ReportTemplateVersion
+    ReportTemplateVersionCreateRequest:
+      properties:
+        version:
+          type: string
+          title: Version
+        format:
+          $ref: '#/components/schemas/ReportFormat'
+        content:
+          type: string
+          title: Content
+        variables_schema:
+          additionalProperties: true
+          type: object
+          title: Variables Schema
+        status:
+          type: string
+          title: Status
+          default: draft
+      type: object
+      required:
+      - version
+      - format
+      - content
+      title: ReportTemplateVersionCreateRequest
+    RetryConfig:
+      properties:
+        max_attempts:
+          type: integer
+          minimum: 0.0
+          title: Max Attempts
+          default: 2
+        backoff_seconds:
+          type: integer
+          minimum: 0.0
+          title: Backoff Seconds
+          default: 3
+      type: object
+      title: RetryConfig
+    RetryFailedData:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        retry_count:
+          type: integer
+          title: Retry Count
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - task_id
+      - retry_count
+      - status
+      title: RetryFailedData
+    ReviewDecision:
+      type: string
+      enum:
+      - confirmed
+      - override
+      - rejected
+      - unresolved
+      title: ReviewDecision
+    ReviewStatus:
+      type: string
+      enum:
+      - pending
+      - in_review
+      - resolved
+      - rejected
+      title: ReviewStatus
+    RiskAssessment:
+      properties:
+        attempt_id:
+          type: integer
+          title: Attempt Id
+        overall_score:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Overall Score
+        risk_level:
+          $ref: '#/components/schemas/RiskLevel'
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        uncertainty:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Uncertainty
+        judge_trust_score:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Judge Trust Score
+        score_version:
+          type: string
+          title: Score Version
+        dimensions:
+          items:
+            $ref: '#/components/schemas/RiskDimension'
+          type: array
+          title: Dimensions
+        rule_override_applied:
+          type: boolean
+          title: Rule Override Applied
+          default: false
+        calculated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Calculated At
+      type: object
+      required:
+      - attempt_id
+      - overall_score
+      - risk_level
+      - confidence
+      - uncertainty
+      - judge_trust_score
+      - score_version
+      title: RiskAssessment
+    RiskCategory:
+      properties:
+        risk_category_id:
+          type: integer
+          title: Risk Category Id
+        taxonomy_id:
+          type: integer
+          title: Taxonomy Id
+        parent_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Parent Id
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        definition:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Definition
+        severity_weight:
+          type: integer
+          maximum: 100.0
+          minimum: 0.0
+          title: Severity Weight
+          default: 0
+        children:
+          items:
+            $ref: '#/components/schemas/RiskCategory'
+          type: array
+          title: Children
+      type: object
+      required:
+      - risk_category_id
+      - taxonomy_id
+      - code
+      - name
+      title: RiskCategory
+    RiskCategoryCreateRequest:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+        parent_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Parent Id
+        definition:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Definition
+        severity_weight:
+          type: integer
+          maximum: 100.0
+          minimum: 0.0
+          title: Severity Weight
+          default: 0
+        examples:
+          additionalProperties: true
+          type: object
+          title: Examples
+        sort_order:
+          type: integer
+          title: Sort Order
+          default: 0
+      type: object
+      required:
+      - code
+      - name
+      title: RiskCategoryCreateRequest
+    RiskCategoryRef:
+      properties:
+        code:
+          type: string
+          title: Code
+        name:
+          type: string
+          title: Name
+      type: object
+      required:
+      - code
+      - name
+      title: RiskCategoryRef
+    RiskDimension:
+      properties:
+        dimension_code:
+          type: string
+          title: Dimension Code
+        score:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Score
+        weight:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Weight
+        source:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source
+        evidence:
+          title: Evidence
+      type: object
+      required:
+      - dimension_code
+      - score
+      - weight
+      title: RiskDimension
+    RiskLevel:
+      type: string
+      enum:
+      - info
+      - low
+      - medium
+      - high
+      - critical
+      title: RiskLevel
+    RiskMapping:
+      properties:
+        raw_label:
+          type: string
+          title: Raw Label
+        risk_category_id:
+          type: integer
+          title: Risk Category Id
+        mapping_type:
+          type: string
+          title: Mapping Type
+          default: alias
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+          default: 1.0
+        mapping_note:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mapping Note
+      type: object
+      required:
+      - raw_label
+      - risk_category_id
+      title: RiskMapping
+    RiskMappingBatchRequest:
+      properties:
+        mappings:
+          items:
+            $ref: '#/components/schemas/RiskMapping'
+          type: array
+          title: Mappings
+      type: object
+      required:
+      - mappings
+      title: RiskMappingBatchRequest
+    RiskMappingBatchResult:
+      properties:
+        created_count:
+          type: integer
+          title: Created Count
+          default: 0
+        updated_count:
+          type: integer
+          title: Updated Count
+          default: 0
+        remaining_unresolved_count:
+          type: integer
+          title: Remaining Unresolved Count
+          default: 0
+      type: object
+      title: RiskMappingBatchResult
+    RiskMappingItem:
+      properties:
+        raw_label:
+          type: string
+          title: Raw Label
+        count:
+          type: integer
+          title: Count
+          default: 0
+        mapped_category_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Mapped Category Id
+        mapped_category_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mapped Category Code
+        mapped_category_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mapped Category Name
+        status:
+          type: string
+          title: Status
+          default: unmapped
+      type: object
+      required:
+      - raw_label
+      title: RiskMappingItem
+    RiskMappingStatus:
+      properties:
+        benchmark_version_id:
+          type: integer
+          title: Benchmark Version Id
+        total_labels:
+          type: integer
+          title: Total Labels
+          default: 0
+        mapped_labels:
+          type: integer
+          title: Mapped Labels
+          default: 0
+        mapping_rate:
+          type: number
+          title: Mapping Rate
+          default: 0.0
+        unresolved_labels:
+          items:
+            type: string
+          type: array
+          title: Unresolved Labels
+        items:
+          items:
+            $ref: '#/components/schemas/RiskMappingItem'
+          type: array
+          title: Items
+      type: object
+      required:
+      - benchmark_version_id
+      title: RiskMappingStatus
+    RiskSummary:
+      properties:
+        overall_score:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Overall Score
+        risk_level:
+          $ref: '#/components/schemas/RiskLevel'
+        confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Confidence
+        needs_review:
+          type: boolean
+          title: Needs Review
+          default: false
+      type: object
+      required:
+      - overall_score
+      - risk_level
+      - confidence
+      title: RiskSummary
+    RiskTaxonomy:
+      properties:
+        risk_taxonomy_id:
+          type: integer
+          title: Risk Taxonomy Id
+        name:
+          type: string
+          title: Name
+        version:
+          type: string
+          title: Version
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        is_default:
+          type: boolean
+          title: Is Default
+          default: false
+        status:
+          type: string
+          title: Status
+          default: active
+      type: object
+      required:
+      - risk_taxonomy_id
+      - name
+      - version
+      title: RiskTaxonomy
+    RiskTaxonomyCreateRequest:
+      properties:
+        name:
+          type: string
+          title: Name
+        version:
+          type: string
+          title: Version
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        is_default:
+          type: boolean
+          title: Is Default
+          default: false
+      type: object
+      required:
+      - name
+      - version
+      title: RiskTaxonomyCreateRequest
+    RuleValidationSummary:
+      properties:
+        hit_count:
+          type: integer
+          title: Hit Count
+          default: 0
+        highest_severity:
+          anyOf:
+          - $ref: '#/components/schemas/RiskLevel'
+          - type: 'null'
+      type: object
+      title: RuleValidationSummary
+    ScoringConfig:
+      properties:
+        score_version:
+          type: string
+          title: Score Version
+          default: risk-v1
+        weights:
+          $ref: '#/components/schemas/ScoringWeights'
+      type: object
+      title: ScoringConfig
+    ScoringWeights:
+      properties:
+        harm_severity:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Harm Severity
+          default: 0.3
+        attack_success:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Attack Success
+          default: 0.25
+        intent_compliance:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Intent Compliance
+          default: 0.2
+        rule_violation_severity:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Rule Violation Severity
+          default: 0.15
+        multi_run_consistency:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Multi Run Consistency
+          default: 0.05
+        cross_template_consistency:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Cross Template Consistency
+          default: 0.05
+      type: object
+      title: ScoringWeights
+    Statistics:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        total_results:
+          type: integer
+          title: Total Results
+          default: 0
+        safe_count:
+          type: integer
+          title: Safe Count
+          default: 0
+        unsafe_count:
+          type: integer
+          title: Unsafe Count
+          default: 0
+        uncertain_count:
+          type: integer
+          title: Uncertain Count
+          default: 0
+        high_risk_count:
+          type: integer
+          title: High Risk Count
+          default: 0
+        critical_risk_count:
+          type: integer
+          title: Critical Risk Count
+          default: 0
+        attack_success_rate:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Attack Success Rate
+          default: 0.0
+        average_risk_score:
+          type: number
+          maximum: 100.0
+          minimum: 0.0
+          title: Average Risk Score
+          default: 0.0
+        average_judge_confidence:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Average Judge Confidence
+          default: 0.0
+        judge_average_trust:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Judge Average Trust
+          default: 0.0
+        manual_review_rate:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Manual Review Rate
+          default: 0.0
+        rule_hit_rate:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Rule Hit Rate
+          default: 0.0
+        risk_level_distribution:
+          additionalProperties:
+            type: integer
+          type: object
+          title: Risk Level Distribution
+        risk_category_distribution:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Risk Category Distribution
+        model_breakdown:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Model Breakdown
+        attack_template_breakdown:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Attack Template Breakdown
+        top_risky_cases:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Top Risky Cases
+      type: object
+      required:
+      - task_id
+      title: Statistics
+    StoredFile:
+      properties:
+        file_id:
+          type: integer
+          title: File Id
+        original_name:
+          type: string
+          title: Original Name
+        mime_type:
+          type: string
+          title: Mime Type
+        size_bytes:
+          type: integer
+          title: Size Bytes
+        sha256:
+          type: string
+          title: Sha256
+        owner_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Owner Type
+        owner_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Owner Id
+        created_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Created At
+      type: object
+      required:
+      - file_id
+      - original_name
+      - mime_type
+      - size_bytes
+      - sha256
+      title: StoredFile
+    SystemConfig:
+      properties:
+        config_key:
+          type: string
+          title: Config Key
+        config_value:
+          title: Config Value
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        is_secret:
+          type: boolean
+          title: Is Secret
+          default: false
+      type: object
+      required:
+      - config_key
+      - config_value
+      title: SystemConfig
+    SystemConfigUpdate:
+      properties:
+        config_value:
+          title: Config Value
+      type: object
+      required:
+      - config_value
+      title: SystemConfigUpdate
+    TaskActionData:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        status:
+          type: string
+          title: Status
+        cancel_requested:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Cancel Requested
+      type: object
+      required:
+      - task_id
+      - status
+      title: TaskActionData
+    TaskStatus:
+      type: string
+      enum:
+      - draft
+      - queued
+      - running
+      - paused
+      - succeeded
+      - partially_failed
+      - failed
+      - cancelled
+      title: TaskStatus
+    TaskStatusData:
+      properties:
+        task_id:
+          type: integer
+          title: Task Id
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        progress:
+          type: number
+          maximum: 1.0
+          minimum: 0.0
+          title: Progress
+          default: 0
+        total_cases:
+          type: integer
+          title: Total Cases
+          default: 0
+        completed_cases:
+          type: integer
+          title: Completed Cases
+          default: 0
+        failed_cases:
+          type: integer
+          title: Failed Cases
+          default: 0
+        running_cases:
+          type: integer
+          title: Running Cases
+          default: 0
+        current_stage:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Current Stage
+        queue_position:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Queue Position
+        eta_seconds:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Eta Seconds
+        cancel_requested:
+          type: boolean
+          title: Cancel Requested
+          default: false
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Finished At
+      type: object
+      required:
+      - task_id
+      - status
+      title: TaskStatusData
+    TestCase:
+      properties:
+        test_case_id:
+          type: integer
+          title: Test Case Id
+        benchmark_version_id:
+          type: integer
+          title: Benchmark Version Id
+        external_id:
+          type: string
+          title: External Id
+        prompt:
+          type: string
+          title: Prompt
+        system_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: System Prompt
+        language:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Language
+        source_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Label
+        risk_categories:
+          items:
+            $ref: '#/components/schemas/RiskCategoryRef'
+          type: array
+          title: Risk Categories
+        status:
+          type: string
+          title: Status
+          default: active
+      type: object
+      required:
+      - test_case_id
+      - benchmark_version_id
+      - external_id
+      - prompt
+      title: TestCase
+    TestCaseUpdateRequest:
+      properties:
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
+        system_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: System Prompt
+        language:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Language
+        risk_category_ids:
+          anyOf:
+          - items:
+              type: integer
+            type: array
+          - type: 'null'
+          title: Risk Category Ids
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Status
+      type: object
+      title: TestCaseUpdateRequest
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    LocalToken:
+      type: apiKey
+      in: header
+      name: X-Local-Token
