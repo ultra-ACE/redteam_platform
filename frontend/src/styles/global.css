@@ -1,0 +1,365 @@
+:root {
+  --app-bg: #f5f7fb;
+  --sidebar-bg: #0b1220;
+  --sidebar-muted: #94a3b8;
+  --accent: #4f6ef7;
+  --accent-2: #7c4dff;
+  --card-radius: 16px;
+  --card-shadow: 0 12px 32px rgba(15, 23, 42, 0.07);
+  --border: #e5eaf3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--app-bg);
+  color: #0f172a;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-sider {
+  position: sticky !important;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.app-sider::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-sider::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px 18px;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #4f6ef7, #7c4dff);
+  color: #fff;
+  font-size: 20px;
+  box-shadow: 0 12px 26px rgba(79, 110, 247, 0.35);
+}
+
+.brand-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.brand-subtitle {
+  color: var(--sidebar-muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.app-header {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 82px;
+  height: auto;
+  line-height: normal;
+  padding: 16px 30px;
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.header-title {
+  font-size: 20px;
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.header-subtitle {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
+.app-content {
+  padding: 32px 30px 48px;
+}
+
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.page-header .ant-typography {
+  margin: 0 !important;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.page-header .ant-typography.ant-typography-secondary {
+  font-size: 14px;
+}
+
+.page-header p {
+  margin: 8px 0 0;
+  color: #64748b;
+  max-width: 760px;
+}
+
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  color: #fff;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(255, 255, 255, 0.2), transparent 28%),
+    linear-gradient(135deg, #16224a 0%, #2a3fa5 48%, #6d4de0 100%);
+  box-shadow: 0 20px 50px rgba(43, 63, 165, 0.28);
+}
+
+.hero-card::after {
+  content: "";
+  position: absolute;
+  width: 280px;
+  height: 280px;
+  right: -90px;
+  bottom: -160px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.hero-card .ant-card-body {
+  position: relative;
+  z-index: 1;
+  padding: 34px;
+}
+
+.hero-eyebrow {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  margin-bottom: 12px;
+}
+
+.hero-title {
+  margin: 0;
+  color: #fff;
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+
+.hero-desc {
+  margin: 12px 0 0;
+  max-width: 680px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 14px;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.metric-card {
+  height: 100%;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1);
+}
+
+.metric-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  margin-bottom: 14px;
+}
+
+.metric-label {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.metric-value {
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 6px;
+  letter-spacing: -0.04em;
+}
+
+.metric-hint {
+  color: #94a3b8;
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.section-card {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: var(--card-shadow);
+}
+
+.section-card .ant-card-head {
+  border-bottom-color: #eef2f7;
+}
+
+.section-card .ant-card-head-title {
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.chart-card {
+  min-height: 320px;
+}
+
+.innovation-card {
+  height: 100%;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(180deg, #ffffff, #fbfcff);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.innovation-index {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(79, 110, 247, 0.16), rgba(124, 77, 255, 0.16));
+  color: #4f6ef7;
+  font-weight: 800;
+}
+
+.soft-tag {
+  border: 0 !important;
+  border-radius: 999px !important;
+  padding-inline: 10px !important;
+}
+
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.table-toolbar .ant-input-affix-wrapper,
+.table-toolbar .ant-select {
+  max-width: 280px;
+}
+
+.empty-panel {
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.empty-panel h3 {
+  margin: 16px 0 6px;
+  color: #0f172a;
+}
+
+.empty-panel p {
+  margin: 0 auto;
+  max-width: 520px;
+  color: #64748b;
+}
+
+.code-block {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #0b1220;
+  color: #dbeafe;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, #4f6ef7, #7c4dff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (max-width: 900px) {
+  .app-header {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+
+  .app-content {
+    padding: 18px 16px 32px;
+  }
+
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+  }
+
+  .hero-card .ant-card-body {
+    padding: 22px;
+  }
+
+  .hero-title {
+    font-size: 23px;
+  }
+}

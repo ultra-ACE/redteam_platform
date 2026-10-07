@@ -1,0 +1,30 @@
+# Python
+backend/.venv/
+backend/data/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+.coverage
+htmlcov/
+backend/backend-server.*.log
+
+# Node
+frontend/node_modules/
+frontend/dist/
+.npm-cache/
+*.log
+
+# Local environment and secrets
+.env
+*.local
+
+# Docker image archives and release bundles
+images/
+release/
+*.tar
+*.tar.gz
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
