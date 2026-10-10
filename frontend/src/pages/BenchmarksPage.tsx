@@ -12,6 +12,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Select,
   Space,
   Table,
   Tag,
@@ -24,6 +25,7 @@ import {
   deleteBenchmark,
   deleteBenchmarkVersion,
   importBenchmark,
+  listBenchmarkAdapters,
   listBenchmarks,
   listBenchmarkVersions,
   listTestCases,
@@ -58,6 +60,11 @@ export function BenchmarksPage() {
     queryKey: ['test-cases', selectedVersion?.benchmark_version_id],
     queryFn: () => listTestCases({ benchmark_version_id: selectedVersion!.benchmark_version_id, page_size: 200 }),
     enabled: Boolean(selectedVersion?.benchmark_version_id),
+  });
+  const adaptersQuery = useQuery({
+    queryKey: ['benchmark-adapters'],
+    queryFn: listBenchmarkAdapters,
+    staleTime: 5 * 60 * 1000,
   });
 
   const importMutation = useMutation({
@@ -173,6 +180,13 @@ export function BenchmarksPage() {
           if (values.risk_taxonomy_id) {
             formData.append('risk_taxonomy_id', String(values.risk_taxonomy_id));
           }
+          // 留空则由后端按表头签名自动识别数据集结构
+          if (values.source_type) {
+            formData.append('source_type', String(values.source_type));
+          }
+          if (values.default_risk_category_code) {
+            formData.append('default_risk_category_code', String(values.default_risk_category_code));
+          }
           formData.append('file', file);
           return { formData, file_name: file.name };
         });
@@ -185,7 +199,7 @@ export function BenchmarksPage() {
     <div className="page-stack">
       <PageHeader
         title="Benchmark 管理"
-        description="导入 JSONL、JSON、CSV 数据集，自动写入 Benchmark 版本、测试用例和风险映射。"
+        description="支持 HarmBench、AdvBench、TDC2023、中文数据集的原始文件直接导入：自动识别数据集结构，归一为统一测试用例和统一风险分类。"
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => benchmarksQuery.refetch()}>
@@ -391,9 +405,29 @@ export function BenchmarksPage() {
               dataSource={importResults}
               columns={[
                 { title: '文件', dataIndex: 'file_name' },
+                {
+                  title: '识别格式',
+                  width: 210,
+                  render: (_, record) =>
+                    record.detected_adapter ? (
+                      <Space direction="vertical" size={0}>
+                        <Tag color="geekblue">{record.adapter_display_name ?? record.detected_adapter}</Tag>
+                        <span style={{ fontSize: 12, color: '#64748b' }}>
+                          {record.detected_adapter} · 置信度 {record.adapter_confidence ?? '-'}
+                        </span>
+                      </Space>
+                    ) : (
+                      '-'
+                    ),
+                },
                 { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 90 },
                 { title: '成功', dataIndex: 'imported_count', width: 80 },
                 { title: '失败', dataIndex: 'failed_count', width: 80 },
+                {
+                  title: '无标签',
+                  width: 90,
+                  render: (_, record) => record.unlabeled_count ?? 0,
+                },
                 {
                   title: '未映射标签',
                   render: (_, record) =>
@@ -424,6 +458,54 @@ export function BenchmarksPage() {
                 ]}
               />
             ) : null}
+            {importResults.some((item) => item.label_mappings?.length) ? (
+              <Card size="small" title="风险标签归一结果（原始标签 → 统一风险分类）">
+                <Table
+                  rowKey={(record) => `${record.file_name}-${record.raw_label}`}
+                  size="small"
+                  pagination={false}
+                  dataSource={importResults.flatMap((item) =>
+                    (item.label_mappings ?? []).map((mapping) => ({ ...mapping, file_name: item.file_name })),
+                  )}
+                  columns={[
+                    { title: '文件', dataIndex: 'file_name', width: 200 },
+                    { title: '原始标签', dataIndex: 'raw_label' },
+                    { title: '用例数', dataIndex: 'case_count', width: 90 },
+                    {
+                      title: '统一风险类别',
+                      render: (_, record) =>
+                        record.risk_category_code ? (
+                          <Space>
+                            <Tag color="purple">{record.risk_category_code}</Tag>
+                            <span>{record.risk_category_name}</span>
+                          </Space>
+                        ) : (
+                          <Tag color="warning">未映射</Tag>
+                        ),
+                    },
+                    {
+                      title: '命中方式',
+                      dataIndex: 'matched_by',
+                      width: 130,
+                      render: (value: string | null | undefined) => {
+                        const labels: Record<string, string> = {
+                          code: '统一编码',
+                          name: '分类名',
+                          alias: '别名词典',
+                          benchmark_history: '历史映射',
+                          default: '默认兜底',
+                        };
+                        return value ? (
+                          <Tag color="blue">{labels[value] ?? value}</Tag>
+                        ) : (
+                          <Tag color="warning">待人工映射</Tag>
+                        );
+                      },
+                    },
+                  ]}
+                />
+              </Card>
+            ) : null}
           </Space>
         ) : (
           <Form form={form} layout="vertical" initialValues={{ risk_taxonomy_id: 1 }}>
@@ -444,8 +526,35 @@ export function BenchmarksPage() {
                 </Form.Item>
               </Col>
             </Row>
-            <Form.Item name="risk_taxonomy_id" label="风险体系 ID">
-              <InputNumber min={1} style={{ width: '100%' }} />
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item name="risk_taxonomy_id" label="风险体系 ID">
+                  <InputNumber min={1} style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="default_risk_category_code"
+                  label="默认风险类别（可选）"
+                  extra="数据集本身没有风险标签时用它兜底；留空则记为「无风险标签」，不做猜测"
+                >
+                  <Input placeholder="例如：harmful" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item
+              name="source_type"
+              label="数据集结构"
+              extra="默认自动识别。HarmBench、AdvBench、TDC2023 的原始 CSV 可直接导入，无需事先转换"
+            >
+              <Select
+                allowClear
+                placeholder="自动识别（按表头签名）"
+                options={(adaptersQuery.data ?? []).map((item) => ({
+                  value: item.name,
+                  label: `${item.display_name}（${item.name}）`,
+                }))}
+              />
             </Form.Item>
             <Form.Item label="数据集文件" required>
               <Dragger
@@ -458,7 +567,10 @@ export function BenchmarksPage() {
               >
                 <p className="ant-upload-drag-icon"><InboxOutlined /></p>
                 <p className="ant-upload-text">点击或拖拽数据集文件到此处（可多选）</p>
-                <p className="ant-upload-hint">支持 JSONL、JSON、CSV，可一次选择最多 10 个文件，每个文件导入为一个独立版本</p>
+                <p className="ant-upload-hint">
+                  支持 JSONL、JSON、CSV；HarmBench / AdvBench / TDC2023 原始 CSV 可直接导入，无需事先转换。
+                  可一次选择最多 10 个文件，每个文件导入为一个独立版本
+                </p>
               </Dragger>
             </Form.Item>
           </Form>

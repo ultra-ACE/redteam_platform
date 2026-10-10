@@ -68,6 +68,27 @@ export type BenchmarkImportResult = {
   failed_count: number;
   unresolved_labels: string[];
   errors: BenchmarkImportError[];
+  detected_adapter?: string | null;
+  adapter_display_name?: string | null;
+  adapter_confidence?: number | null;
+  field_mapping?: Record<string, string>;
+  label_mappings?: BenchmarkImportLabelMapping[];
+  unlabeled_count?: number;
+};
+
+export type BenchmarkImportLabelMapping = {
+  raw_label: string;
+  risk_category_id?: number | null;
+  risk_category_code?: string | null;
+  risk_category_name?: string | null;
+  matched_by?: string | null;
+  case_count: number;
+};
+
+export type BenchmarkAdapter = {
+  name: string;
+  display_name: string;
+  description: string;
 };
 
 

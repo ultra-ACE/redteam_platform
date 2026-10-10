@@ -8,6 +8,7 @@ import type {
   AttemptDetail,
   AuditLog,
   Benchmark,
+  BenchmarkAdapter,
   BenchmarkImportResult,
   BenchmarkVersion,
   EvaluationResult,
@@ -70,6 +71,11 @@ export const importBenchmark = async (payload: FormData) => {
   const { data } = await apiClient.post<ApiEnvelope<BenchmarkImportResult>>('/benchmarks/import', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  return data.data;
+};
+
+export const listBenchmarkAdapters = async () => {
+  const { data } = await apiClient.get<ApiEnvelope<BenchmarkAdapter[]>>('/benchmarks/adapters');
   return data.data;
 };
 

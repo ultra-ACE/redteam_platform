@@ -99,6 +99,17 @@ class BenchmarkImportError(ORMSchema):
     message: str
 
 
+class BenchmarkImportLabelMapping(ORMSchema):
+    """导入报告中的单条风险标签归一结果。"""
+
+    raw_label: str
+    risk_category_id: int | None = None
+    risk_category_code: str | None = None
+    risk_category_name: str | None = None
+    matched_by: str | None = None
+    case_count: int = 0
+
+
 class BenchmarkImportResult(ORMSchema):
     benchmark_id: int
     benchmark_version_id: int
@@ -106,6 +117,14 @@ class BenchmarkImportResult(ORMSchema):
     failed_count: int
     unresolved_labels: list[str] = Field(default_factory=list)
     errors: list[BenchmarkImportError] = Field(default_factory=list)
+    # 异构适配结果：识别成哪个数据集结构、字段怎么映射的
+    detected_adapter: str | None = None
+    adapter_display_name: str | None = None
+    adapter_confidence: float | None = None
+    field_mapping: dict[str, str] = Field(default_factory=dict)
+    # 统一风险分类结果：每个原始标签归到了哪个统一类别
+    label_mappings: list[BenchmarkImportLabelMapping] = Field(default_factory=list)
+    unlabeled_count: int = 0
 
 
 class TestCase(ORMSchema):

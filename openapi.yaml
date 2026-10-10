@@ -160,6 +160,22 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - LocalToken: []
+  /api/v1/benchmarks/adapters:
+    get:
+      tags:
+      - Benchmark
+      summary: List Benchmark Adapters
+      description: 列出内置的异构数据集适配器，导入时可据此手动指定 source_type。
+      operationId: listBenchmarkAdapters
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_list_dict_str__Any___'
+      security:
+      - LocalToken: []
   /api/v1/benchmarks:
     get:
       tags:
@@ -3519,6 +3535,32 @@ components:
           - req_01J8Z6K9YQ6M2H
       type: object
       title: ApiResponse[list[RiskCategory]]
+    ApiResponse_list_dict_str__Any___:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[list[dict[str, Any]]]
     AttackMethod:
       properties:
         attack_method_id:
@@ -4097,6 +4139,16 @@ components:
           - type: integer
           - type: 'null'
           title: Risk Taxonomy Id
+        source_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Type
+        default_risk_category_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Default Risk Category Code
       type: object
       required:
       - name

@@ -19,6 +19,7 @@ from app.db.models import (
     RiskAssessment,
     RiskCategory,
     RiskDimensionScore,
+    RiskLabelAlias,
     RiskTaxonomy,
     RuleDefinition,
     RuleSet,
@@ -62,6 +63,10 @@ class RiskCategoryRepository(BaseRepository[RiskCategory]):
 
 class BenchmarkRiskMappingRepository(BaseRepository[BenchmarkRiskMapping]):
     model = BenchmarkRiskMapping
+
+
+class RiskLabelAliasRepository(BaseRepository[RiskLabelAlias]):
+    model = RiskLabelAlias
 
 
 class ModelRepository(BaseRepository[ModelRegistry]):

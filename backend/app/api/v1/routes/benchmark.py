@@ -13,6 +13,7 @@ from app.schemas import (
     TestCaseUpdateRequest,
 )
 from app.services import BenchmarkImportService, BenchmarkService, UnitOfWork
+from app.services.dataset_adapters import list_adapters
 
 router = APIRouter()
 
@@ -28,6 +29,8 @@ async def import_benchmark(
     version: str = Form(...),
     file: UploadFile = File(...),
     risk_taxonomy_id: int | None = Form(default=None),
+    source_type: str | None = Form(default=None),
+    default_risk_category_code: str | None = Form(default=None),
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
@@ -47,10 +50,25 @@ async def import_benchmark(
             file_name=file.filename or "dataset.jsonl",
             mime_type=file.content_type,
             risk_taxonomy_id=risk_taxonomy_id,
+            source_type=(source_type or "").strip() or None,
+            default_risk_category_code=(default_risk_category_code or "").strip() or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ok(result.model_dump())
+
+
+@router.get(
+    "/benchmarks/adapters",
+    response_model=ApiResponse[list[dict[str, Any]]],
+    operation_id="listBenchmarkAdapters",
+    tags=["Benchmark"],
+)
+async def list_benchmark_adapters(
+    _: None = Depends(require_local_token),
+) -> dict:
+    """列出内置的异构数据集适配器，导入时可据此手动指定 source_type。"""
+    return ok(list_adapters())
 
 
 @router.get(

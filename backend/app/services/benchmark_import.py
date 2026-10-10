@@ -1,3 +1,15 @@
+"""Benchmark 导入服务：异构适配 + 统一风险分类。
+
+导入流程分三步，对应创新点一的三个层次：
+
+1. 结构适配：由 dataset_adapters 按表头签名识别数据集来源（HarmBench /
+   AdvBench / TDC2023 / 中文数据集 / 通用），把任意结构归一成 CanonicalCase，
+   不再需要事先手工转成 JSONL。
+2. 风险归一：把各家原始风险标签按「统一 code → 统一分类名 → 别名词典 →
+   该 Benchmark 历史映射」的顺序映射到统一风险分类，并记录命中方式。
+3. 入库：产出统一的 test_cases + test_case_risk_labels + benchmark_risk_mappings，
+   后续评测链路完全与数据来源无关。
+"""
 import csv
 import hashlib
 import io
@@ -8,29 +20,27 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from app.db.models import Benchmark, BenchmarkRiskMapping, BenchmarkVersion, RiskCategory, TestCase, TestCaseRiskLabel
-from app.schemas import BenchmarkImportError, BenchmarkImportResult
+from app.db.models import (
+    Benchmark,
+    BenchmarkRiskMapping,
+    BenchmarkVersion,
+    RiskCategory,
+    TestCase,
+    TestCaseRiskLabel,
+)
+from app.schemas import BenchmarkImportError, BenchmarkImportLabelMapping, BenchmarkImportResult
 from app.services.base import BaseService
+from app.services.dataset_adapters import CanonicalCase, detect_adapter
+from app.services.risk_aliases import ensure_builtin_aliases, resolve_default_taxonomy_id
 from app.services.storage import FileStorageService
 
-KNOWN_FIELDS = {
-    "external_id",
-    "id",
-    "case_id",
-    "prompt",
-    "question",
-    "input",
-    "text",
-    "system_prompt",
-    "language",
-    "lang",
-    "raw_label",
-    "label",
-    "category",
-    "normalized_risk_codes",
-    "risk_category_code",
-    "metadata",
-}
+UNLABELED_KEY = "(无风险标签)"
+DEFAULT_KEY = "(默认类别兜底)"
+
+
+def alias_key(value: Any) -> str:
+    """别名词典归一化键：去首尾空白、转小写、压缩内部空白（保留点号与连字符）。"""
+    return " ".join(str(value).strip().lower().split())
 
 
 class BenchmarkImportService(BaseService):
@@ -43,14 +53,35 @@ class BenchmarkImportService(BaseService):
         file_name: str,
         mime_type: str | None = None,
         risk_taxonomy_id: int | None = None,
+        source_type: str | None = None,
+        default_risk_category_code: str | None = None,
         base_dir: Path | None = None,
     ) -> BenchmarkImportResult:
         if not content:
             raise ValueError("dataset file is empty")
 
-        rows, errors = self._parse_rows(content, file_name)
-        if not rows:
+        raw_rows, errors = self._parse_rows(content, file_name)
+        if not raw_rows:
             raise ValueError("no valid dataset rows found")
+
+        adapter, match = detect_adapter(
+            [item for _, item in raw_rows],
+            file_name=file_name,
+            explicit=source_type,
+        )
+
+        # 统一风险分类：确定目标风险体系，并补齐内置别名词典
+        effective_taxonomy_id = risk_taxonomy_id or resolve_default_taxonomy_id(self.uow)
+        if effective_taxonomy_id is not None:
+            ensure_builtin_aliases(self.uow, effective_taxonomy_id)
+
+        default_category = None
+        if default_risk_category_code:
+            default_category = self._find_category_by_code(
+                default_risk_category_code, effective_taxonomy_id
+            )
+            if default_category is None:
+                raise ValueError(f"默认风险类别不存在: {default_risk_category_code}")
 
         checksum = hashlib.sha256(content).hexdigest()
         stored_file = FileStorageService(self.uow).save_bytes(
@@ -74,6 +105,14 @@ class BenchmarkImportService(BaseService):
             benchmark_id=benchmark.id,
             version=version,
             source_file_id=stored_file.id,
+            raw_schema={
+                "adapter": match.adapter,
+                "adapter_display_name": match.display_name,
+                "adapter_confidence": match.confidence,
+                "field_mapping": match.field_mapping,
+                "source_file": file_name,
+                "detection": match.note,
+            },
             checksum=checksum,
             case_count=0,
             imported_at=datetime.now(timezone.utc),
@@ -81,24 +120,50 @@ class BenchmarkImportService(BaseService):
         )
         self.uow.benchmark_versions.add(benchmark_version)
 
-        valid_cases: list[tuple[int, dict[str, Any], TestCase]] = []
-        for row_number, item in rows:
+        valid_cases: list[tuple[int, CanonicalCase, TestCase]] = []
+        for row_number, item in raw_rows:
             try:
-                test_case = self._build_test_case(benchmark_version.id, row_number, item)
+                case = adapter.normalize(item, row_number, file_name)
+                test_case = self._build_test_case(benchmark_version.id, case)
                 self.uow.test_cases.add(test_case)
-                valid_cases.append((row_number, item, test_case))
+                valid_cases.append((row_number, case, test_case))
             except Exception as exc:
                 errors.append(BenchmarkImportError(row_number=row_number, message=str(exc)))
 
         self.uow.session.flush()
 
         unresolved: set[str] = set()
+        label_stats: dict[str, dict[str, Any]] = {}
+        resolution_cache: dict[str, tuple[RiskCategory | None, str | None]] = {}
         imported_count = 0
-        for row_number, item, test_case in valid_cases:
+        unlabeled_count = 0
+
+        for row_number, case, test_case in valid_cases:
             try:
-                categories = self._resolve_categories(item, risk_taxonomy_id)
-                if not categories:
-                    unresolved.update(self._raw_labels(item))
+                labels = list(dict.fromkeys(case.risk_codes + case.raw_labels))
+                categories: list[RiskCategory] = []
+
+                for label in labels:
+                    category, matched_by = self._resolve_label(
+                        label,
+                        effective_taxonomy_id,
+                        benchmark.id,
+                        resolution_cache,
+                    )
+                    self._record_label_stat(label_stats, label, category, matched_by)
+                    if category is None:
+                        unresolved.add(label)
+                    elif category not in categories:
+                        categories.append(category)
+
+                if not labels:
+                    if default_category is not None:
+                        categories = [default_category]
+                        self._record_label_stat(label_stats, DEFAULT_KEY, default_category, "default")
+                    else:
+                        unlabeled_count += 1
+                        self._record_label_stat(label_stats, UNLABELED_KEY, None, None)
+
                 for category in categories:
                     self.uow.test_case_risk_labels.add(
                         TestCaseRiskLabel(
@@ -109,7 +174,7 @@ class BenchmarkImportService(BaseService):
                             confidence=1.0,
                         )
                     )
-                    self._ensure_mapping(benchmark_version.id, item, category)
+                    self._ensure_mapping(benchmark_version.id, case, category)
                 imported_count += 1
             except Exception as exc:
                 errors.append(BenchmarkImportError(row_number=row_number, message=str(exc)))
@@ -126,9 +191,21 @@ class BenchmarkImportService(BaseService):
             failed_count=len(errors),
             unresolved_labels=sorted(unresolved),
             errors=errors,
+            detected_adapter=match.adapter,
+            adapter_display_name=match.display_name,
+            adapter_confidence=match.confidence,
+            field_mapping=match.field_mapping,
+            label_mappings=self._build_label_mappings(label_stats),
+            unlabeled_count=unlabeled_count,
         )
 
-    def _parse_rows(self, content: bytes, file_name: str) -> tuple[list[tuple[int, dict[str, Any]]], list[BenchmarkImportError]]:
+    # ---------- 解析 ----------
+
+    def _parse_rows(
+        self,
+        content: bytes,
+        file_name: str,
+    ) -> tuple[list[tuple[int, dict[str, Any]]], list[BenchmarkImportError]]:
         suffix = Path(file_name).suffix.lower()
         try:
             if suffix in {".jsonl", ".ndjson"}:
@@ -197,6 +274,8 @@ class BenchmarkImportService(BaseService):
                 errors.append(BenchmarkImportError(row_number=index, message=str(exc)))
         return rows, errors
 
+    # ---------- 入库 ----------
+
     def _get_or_create_benchmark(self, name: str) -> Benchmark:
         slug = self._slugify(name)
         existing = self.uow.benchmarks.list(page=1, page_size=1, slug=slug)
@@ -211,64 +290,101 @@ class BenchmarkImportService(BaseService):
         )
         return self.uow.benchmarks.add(benchmark)
 
-    def _build_test_case(self, benchmark_version_id: int, row_number: int, item: dict[str, Any]) -> TestCase:
-        prompt = item.get("prompt") or item.get("question") or item.get("input") or item.get("text")
-        if not prompt:
-            raise ValueError("missing prompt")
-        system_prompt = item.get("system_prompt")
-        external_id = str(item.get("external_id") or item.get("id") or item.get("case_id") or f"case-{row_number}")
-        metadata = item.get("metadata")
-        if not isinstance(metadata, dict):
-            metadata = {key: value for key, value in item.items() if key not in KNOWN_FIELDS}
+    def _build_test_case(self, benchmark_version_id: int, case: CanonicalCase) -> TestCase:
         content_hash = hashlib.sha256(
-            f"{system_prompt or ''}\n{prompt}".encode("utf-8")
+            f"{case.system_prompt or ''}\n{case.prompt}".encode("utf-8")
         ).hexdigest()
         return TestCase(
             benchmark_version_id=benchmark_version_id,
-            external_id=external_id,
-            prompt=str(prompt),
-            system_prompt=str(system_prompt) if system_prompt else None,
-            language=str(item.get("language") or item.get("lang") or "zh"),
-            source_label=self._raw_label(item),
-            case_metadata=metadata,
+            external_id=case.external_id[:128],
+            prompt=case.prompt,
+            system_prompt=case.system_prompt,
+            language=(case.language or "zh")[:32],
+            source_label=case.raw_labels[0] if case.raw_labels else None,
+            case_metadata=case.metadata,
             content_hash=content_hash,
             status="active",
         )
 
-    def _resolve_categories(self, item: dict[str, Any], risk_taxonomy_id: int | None) -> list[RiskCategory]:
-        codes = item.get("normalized_risk_codes") or []
-        if isinstance(codes, str):
-            codes = [code.strip() for code in codes.split(",") if code.strip()]
-        codes = list(codes)
-        single_code = item.get("risk_category_code")
-        if single_code and single_code not in codes:
-            codes.append(single_code)
-        if not codes:
-            raw_label = self._raw_label(item)
-            if raw_label:
-                codes = [raw_label]
+    # ---------- 风险归一 ----------
 
-        categories: list[RiskCategory] = []
-        seen: set[int] = set()
-        for code in codes:
-            category = self._find_category(str(code), risk_taxonomy_id)
-            if category is not None and category.id not in seen:
-                categories.append(category)
-                seen.add(category.id)
-        return categories
+    def _resolve_label(
+        self,
+        label: str,
+        risk_taxonomy_id: int | None,
+        benchmark_id: int,
+        cache: dict[str, tuple[RiskCategory | None, str | None]],
+    ) -> tuple[RiskCategory | None, str | None]:
+        """四级解析：统一 code → 统一分类名 → 别名词典 → 该 Benchmark 历史映射。"""
+        cache_key = f"{risk_taxonomy_id}:{benchmark_id}:{label}"
+        if cache_key in cache:
+            return cache[cache_key]
 
-    def _find_category(self, value: str, risk_taxonomy_id: int | None) -> RiskCategory | None:
-        filters: dict[str, Any] = {"page": 1, "page_size": 1}
+        category = self._find_category_by_code(label, risk_taxonomy_id)
+        matched_by = "code" if category else None
+        if category is None:
+            category = self._find_category_by_name(label, risk_taxonomy_id)
+            matched_by = "name" if category else None
+        if category is None:
+            category = self._find_by_alias(label, risk_taxonomy_id)
+            matched_by = "alias" if category else None
+        if category is None:
+            category = self._find_by_benchmark_history(benchmark_id, label)
+            matched_by = "benchmark_history" if category else None
+
+        result = (category, matched_by)
+        cache[cache_key] = result
+        return result
+
+    def _find_category_by_code(self, value: str, risk_taxonomy_id: int | None) -> RiskCategory | None:
+        filters: dict[str, Any] = {"code": value}
         if risk_taxonomy_id is not None:
             filters["taxonomy_id"] = risk_taxonomy_id
-        by_code = self.uow.risk_categories.list(code=value, **filters)
-        if by_code:
-            return by_code[0]
-        by_name = self.uow.risk_categories.list(name=value, **filters)
-        return by_name[0] if by_name else None
+        found = self.uow.risk_categories.list(page=1, page_size=1, **filters)
+        return found[0] if found else None
 
-    def _ensure_mapping(self, benchmark_version_id: int, item: dict[str, Any], category: RiskCategory) -> None:
-        for raw_label in self._raw_labels(item):
+    def _find_category_by_name(self, value: str, risk_taxonomy_id: int | None) -> RiskCategory | None:
+        filters: dict[str, Any] = {"name": value}
+        if risk_taxonomy_id is not None:
+            filters["taxonomy_id"] = risk_taxonomy_id
+        found = self.uow.risk_categories.list(page=1, page_size=1, **filters)
+        return found[0] if found else None
+
+    def _find_by_alias(self, value: str, risk_taxonomy_id: int | None) -> RiskCategory | None:
+        filters: dict[str, Any] = {"alias": alias_key(value)}
+        if risk_taxonomy_id is not None:
+            filters["taxonomy_id"] = risk_taxonomy_id
+        aliases = self.uow.risk_label_aliases.list(page=1, page_size=1, **filters)
+        if not aliases:
+            return None
+        return self.uow.risk_categories.get(aliases[0].risk_category_id)
+
+    def _find_by_benchmark_history(self, benchmark_id: int, value: str) -> RiskCategory | None:
+        """同一 Benchmark 的历史版本若已映射过该标签，新版本自动继承，避免重复人工映射。"""
+        versions = self.uow.benchmark_versions.list(
+            page=1,
+            page_size=50,
+            benchmark_id=benchmark_id,
+            order_by=BenchmarkVersion.id.desc(),
+        )
+        for version in versions:
+            mappings = self.uow.benchmark_risk_mappings.list(
+                page=1,
+                page_size=1,
+                benchmark_version_id=version.id,
+                raw_label=value,
+            )
+            if mappings:
+                return self.uow.risk_categories.get(mappings[0].risk_category_id)
+        return None
+
+    def _ensure_mapping(
+        self,
+        benchmark_version_id: int,
+        case: CanonicalCase,
+        category: RiskCategory,
+    ) -> None:
+        for raw_label in case.raw_labels:
             existing = self.uow.benchmark_risk_mappings.list(
                 page=1,
                 page_size=1,
@@ -289,22 +405,41 @@ class BenchmarkImportService(BaseService):
                 )
             )
 
-    def _raw_labels(self, item: dict[str, Any]) -> list[str]:
-        value = item.get("raw_label") or item.get("label") or item.get("category")
-        if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()]
-        if value:
-            return [str(value).strip()]
-        codes = item.get("normalized_risk_codes") or []
-        if isinstance(codes, str):
-            return [code.strip() for code in codes.split(",") if code.strip()]
-        if isinstance(codes, list):
-            return [str(code).strip() for code in codes if str(code).strip()]
-        return []
+    # ---------- 导入报告 ----------
 
-    def _raw_label(self, item: dict[str, Any]) -> str | None:
-        labels = self._raw_labels(item)
-        return labels[0] if labels else None
+    @staticmethod
+    def _record_label_stat(
+        stats: dict[str, dict[str, Any]],
+        label: str,
+        category: RiskCategory | None,
+        matched_by: str | None,
+    ) -> None:
+        entry = stats.setdefault(
+            label,
+            {"count": 0, "category": category, "matched_by": matched_by},
+        )
+        entry["count"] += 1
+        if entry["category"] is None and category is not None:
+            entry["category"] = category
+            entry["matched_by"] = matched_by
+
+    @staticmethod
+    def _build_label_mappings(stats: dict[str, dict[str, Any]]) -> list[BenchmarkImportLabelMapping]:
+        mappings: list[BenchmarkImportLabelMapping] = []
+        for label, entry in stats.items():
+            category = entry["category"]
+            mappings.append(
+                BenchmarkImportLabelMapping(
+                    raw_label=label,
+                    risk_category_id=category.id if category else None,
+                    risk_category_code=category.code if category else None,
+                    risk_category_name=category.name if category else None,
+                    matched_by=entry["matched_by"],
+                    case_count=int(entry["count"]),
+                )
+            )
+        mappings.sort(key=lambda item: (-item.case_count, item.raw_label))
+        return mappings
 
     @staticmethod
     def _slugify(name: str) -> str:

@@ -12,7 +12,7 @@ from app.db.models.reporting import (
     StoredFile,
     SystemConfig,
 )
-from app.db.models.risk import BenchmarkRiskMapping, RiskCategory, RiskTaxonomy
+from app.db.models.risk import BenchmarkRiskMapping, RiskCategory, RiskLabelAlias, RiskTaxonomy
 from app.db.models.risk_assessment import ManualReview, RiskAssessment, RiskDimensionScore
 from app.db.models.task import EvaluationTask, TaskAttempt, TaskCase, TaskEvent, TaskModelBinding
 
@@ -26,6 +26,7 @@ __all__ = [
     "RiskTaxonomy",
     "RiskCategory",
     "BenchmarkRiskMapping",
+    "RiskLabelAlias",
     "ModelRegistry",
     "EvaluationTask",
     "TaskModelBinding",

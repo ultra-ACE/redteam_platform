@@ -55,3 +55,25 @@ class BenchmarkRiskMapping(BaseModel):
     mapping_type: Mapped[str] = mapped_column(String(32), default="alias", nullable=False)
     confidence: Mapped[float] = mapped_column(default=1.0, nullable=False)
     mapping_note: Mapped[str | None] = mapped_column(Text)
+
+
+class RiskLabelAlias(BaseModel):
+    """跨 Benchmark 的风险标签别名词典。
+
+    各家 Benchmark 对同一风险有不同的说法（HarmBench 用 ``chemical_biological``、
+    中文数据集用 ``生化武器``/``CBRN``），本表把它们归一到统一的 ``risk_categories``。
+    导入时按「统一 code → 统一分类名 → 本表别名 → 该 Benchmark 历史映射」的顺序解析。
+    """
+
+    __tablename__ = "risk_label_aliases"
+    __table_args__ = (
+        UniqueConstraint("taxonomy_id", "alias", name="uq_risk_label_aliases_taxonomy_alias"),
+        Index("ix_risk_label_aliases_category", "risk_category_id"),
+    )
+
+    taxonomy_id: Mapped[int] = mapped_column(PKType, ForeignKey("risk_taxonomies.id"), nullable=False)
+    alias: Mapped[str] = mapped_column(String(255), nullable=False)
+    risk_category_id: Mapped[int] = mapped_column(PKType, ForeignKey("risk_categories.id"), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), default="builtin", nullable=False)
+    confidence: Mapped[float] = mapped_column(default=1.0, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
