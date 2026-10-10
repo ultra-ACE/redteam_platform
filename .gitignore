@@ -1,30 +1,39 @@
-# Python
-backend/.venv/
-backend/data/
-**/__pycache__/
-**/*.py[cod]
-**/.pytest_cache/
-.coverage
-htmlcov/
-backend/backend-server.*.log
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Node
-frontend/node_modules/
-frontend/dist/
+# ---------- Node ----------
+node_modules/
+dist/
+.vite/
 .npm-cache/
+npm-debug.log*
+
+# ---------- 本地数据、密钥与运行时产物 ----------
+backend/data/
+backend/.env
+.env
+*.db
+*.sqlite3
 *.log
 
-# Local environment and secrets
-.env
-*.local
+# HarmBench 等数据集转换产物，可由 backend/scripts/convert_harmbench.py 重新生成
+benchmark_datasets/
 
-# Docker image archives and release bundles
-images/
+# ---------- 离线发行包与镜像 ----------
 release/
+images/
 *.tar
 *.tar.gz
 
-# IDE and OS files
-.vscode/
+# ---------- IDE / 系统 ----------
 .idea/
+.vscode/
 .DS_Store
+Thumbs.db

@@ -7,6 +7,69 @@ info:
   description: 大模型安全评测系统后端接口骨架。本服务默认监听本机，不包含登录、用户、角色权限和多租户。
   version: 1.0.0
 paths:
+  /api/v1/judge-profiles/rule-defaults:
+    get:
+      tags: [Judge]
+      summary: 查询规则 Judge 的默认参数
+      description: 返回内置的默认关键词和置信度，供前端「填入默认关键词」按钮使用。
+      operationId: getRuleJudgeDefaults
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/benchmarks/{benchmark_id}:
+    delete:
+      tags: [Benchmark]
+      summary: 删除 Benchmark
+      description: 删除指定 Benchmark 及其全部版本、测试用例和风险映射。若已被评测任务引用则拒绝删除。
+      operationId: deleteBenchmark
+      parameters:
+        - $ref: '#/components/parameters/BenchmarkIdPath'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          x-data-schema:
+            type: object
+            properties:
+              deleted_versions: {type: integer}
+              deleted_test_cases: {type: integer}
+              deleted_labels: {type: integer}
+              deleted_mappings: {type: integer}
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+  /api/v1/benchmark-versions/{benchmark_version_id}:
+    delete:
+      tags: [Benchmark]
+      summary: 删除 Benchmark 版本
+      description: 删除指定版本及其全部测试用例和风险映射。若已被评测任务引用则拒绝删除。
+      operationId: deleteBenchmarkVersion
+      parameters:
+        - $ref: '#/components/parameters/BenchmarkVersionIdPath'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+          x-data-schema:
+            type: object
+            properties:
+              deleted_versions: {type: integer}
+              deleted_test_cases: {type: integer}
+              deleted_labels: {type: integer}
+              deleted_mappings: {type: integer}
+        default:
+          $ref: '#/components/responses/ErrorResponse'
   /api/v1/health:
     get:
       tags:

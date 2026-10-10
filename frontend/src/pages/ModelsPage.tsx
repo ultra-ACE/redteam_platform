@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { Button, Form, Input, Modal, Select, Space, Table, Tag, message } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select, Space, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { checkModelHealth, createModel, listModels } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
@@ -25,11 +25,32 @@ export function ModelsPage() {
     onError: (error: Error) => message.error(error.message),
   });
 
-  const healthMutation = useMutation({
-    mutationFn: checkModelHealth,
-    onSuccess: (data) => message.success(`模型状态：${data.status}`),
-    onError: (error: Error) => message.error(error.message),
-  });
+  const [checkingModelId, setCheckingModelId] = useState<number | null>(null);
+  const [healthResults, setHealthResults] = useState<
+    Record<number, { status: string; latencyMs?: number; error?: string }>
+  >({});
+
+  const runHealthCheck = async (modelId: number) => {
+    setCheckingModelId(modelId);
+    try {
+      const data = await checkModelHealth(modelId);
+      setHealthResults((prev) => ({
+        ...prev,
+        [modelId]: { status: data.status, latencyMs: data.latency_ms },
+      }));
+      if (data.status === 'healthy') {
+        message.success(`连接正常，延迟 ${data.latency_ms ?? '-'} ms`);
+      } else {
+        message.warning(`连接异常：${data.error_message ?? data.status}`);
+      }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : '连接测试失败';
+      setHealthResults((prev) => ({ ...prev, [modelId]: { status: 'error', error: text } }));
+      message.error(text);
+    } finally {
+      setCheckingModelId(null);
+    }
+  };
 
   return (
     <div className="page-stack">
@@ -48,7 +69,22 @@ export function ModelsPage() {
         }
       />
 
-      {!modelsQuery.isLoading && !modelsQuery.data?.items.length ? (
+      {modelsQuery.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message="模型列表加载失败"
+          description={
+            (modelsQuery.error as Error)?.message ??
+            '无法连接到后端服务，请确认 api 容器是否正常运行。'
+          }
+          action={
+            <Button size="small" onClick={() => modelsQuery.refetch()}>
+              重试
+            </Button>
+          }
+        />
+      ) : !modelsQuery.isLoading && !modelsQuery.data?.items.length ? (
         <EmptyPanel
           title="还没有接入模型"
           description="先创建一个模型配置，支持 OpenAI-compatible、Ollama、Custom HTTP 和 Mock 适配器。"
@@ -78,14 +114,34 @@ export function ModelsPage() {
             },
             { title: '创建时间', dataIndex: 'created_at', render: formatDateTime },
             {
+              title: '连接状态',
+              width: 170,
+              render: (_, record) => {
+                const result = healthResults[record.model_id];
+                if (!result) return <Tag>未测试</Tag>;
+                if (result.status === 'healthy') {
+                  return <Tag color="success">正常 · {result.latencyMs ?? '-'} ms</Tag>;
+                }
+                if (result.status === 'error') {
+                  return (
+                    <Tag color="error" title={result.error}>
+                      失败
+                    </Tag>
+                  );
+                }
+                return <Tag color="warning">{result.status}</Tag>;
+              },
+            },
+            {
               title: '操作',
               width: 150,
               render: (_, record) => (
                 <Button
                   type="link"
                   icon={<ThunderboltOutlined />}
-                  loading={healthMutation.isPending}
-                  onClick={() => healthMutation.mutate(record.model_id)}
+                  loading={checkingModelId === record.model_id}
+                  disabled={checkingModelId !== null && checkingModelId !== record.model_id}
+                  onClick={() => runHealthCheck(record.model_id)}
                 >
                   连接测试
                 </Button>
@@ -131,8 +187,12 @@ export function ModelsPage() {
           <Form.Item name="model_name" label="模型标识" rules={[{ required: true }]}>
             <Input placeholder="qwen2.5:7b" />
           </Form.Item>
-          <Form.Item name="secret_ref" label="密钥引用">
-            <Input placeholder="env:QWEN_API_KEY，不填表示无密钥" />
+          <Form.Item
+            name="secret_ref"
+            label="密钥引用"
+            extra="格式为 env:变量名 或 literal:真实Key。推荐 env:DEEPSEEK_API_KEY，并把 Key 写在 .env 中，避免明文入库。"
+          >
+            <Input placeholder="env:DEEPSEEK_API_KEY" />
           </Form.Item>
           <Form.Item name="usage_scope" label="用途" rules={[{ required: true }]}>
             <Select

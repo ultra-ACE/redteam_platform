@@ -48,9 +48,18 @@ export const createModel = async (payload: Record<string, unknown>) => {
   return data.data;
 };
 
+export type ModelHealthResult = {
+  model_id: number;
+  status: string;
+  latency_ms?: number;
+  error_message?: string | null;
+};
+
 export const checkModelHealth = async (modelId: number) => {
-  const { data } = await apiClient.post<ApiEnvelope<{ model_id: number; status: string; latency_ms?: number }>>(
+  const { data } = await apiClient.post<ApiEnvelope<ModelHealthResult>>(
     `/models/${modelId}/health-check`,
+    undefined,
+    { timeout: 30000 },
   );
   return data.data;
 };
@@ -60,6 +69,23 @@ export const importBenchmark = async (payload: FormData) => {
   const { data } = await apiClient.post<ApiEnvelope<BenchmarkImportResult>>('/benchmarks/import', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  return data.data;
+};
+
+export type DeleteSummary = {
+  deleted_versions: number;
+  deleted_test_cases: number;
+  deleted_labels: number;
+  deleted_mappings: number;
+};
+
+export const deleteBenchmark = async (benchmarkId: number) => {
+  const { data } = await apiClient.delete<ApiEnvelope<DeleteSummary>>(`/benchmarks/${benchmarkId}`);
+  return data.data;
+};
+
+export const deleteBenchmarkVersion = async (versionId: number) => {
+  const { data } = await apiClient.delete<ApiEnvelope<DeleteSummary>>(`/benchmark-versions/${versionId}`);
   return data.data;
 };
 
@@ -275,6 +301,20 @@ export const publishAttackTemplateVersion = async (templateId: number) => {
 
 export const listJudgeProfiles = async (params?: Record<string, unknown>) => {
   const { data } = await apiClient.get<ApiEnvelope<PaginatedData<JudgeProfile>>>('/judge-profiles', { params });
+  return data.data;
+};
+
+export type RuleJudgeDefaults = {
+  harmful_keywords: string[];
+  refusal_keywords: string[];
+  harmful_patterns: string[];
+  unsafe_confidence: number;
+  safe_confidence: number;
+  uncertain_confidence: number;
+};
+
+export const getRuleJudgeDefaults = async () => {
+  const { data } = await apiClient.get<ApiEnvelope<RuleJudgeDefaults>>('/judge-profiles/rule-defaults');
   return data.data;
 };
 

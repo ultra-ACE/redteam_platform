@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from app.adapters import GenerateRequest, GenerateResponse, HealthStatus, build_adapter
@@ -73,6 +74,107 @@ class BenchmarkService(BaseService):
                 setattr(test_case, field, value)
         self.uow.session.flush()
         return test_case
+
+    # ---------- 删除 ----------
+
+    def delete_version(self, version_id: int) -> dict[str, int] | None:
+        """删除一个 Benchmark 版本及其全部测试用例和风险映射。"""
+        version = self.uow.benchmark_versions.get(version_id)
+        if version is None:
+            return None
+        self._assert_version_unused(version.id)
+        summary = self._delete_version(version)
+        self.uow.session.flush()
+        return summary
+
+    def delete_benchmark(self, benchmark_id: int) -> dict[str, int] | None:
+        """删除一个 Benchmark 及其全部版本。"""
+        benchmark = self.uow.benchmarks.get(benchmark_id)
+        if benchmark is None:
+            return None
+
+        versions = self.uow.benchmark_versions.list(
+            page=1,
+            page_size=100000,
+            benchmark_id=benchmark_id,
+        )
+        for version in versions:
+            self._assert_version_unused(version.id)
+
+        summary = {
+            "deleted_versions": 0,
+            "deleted_test_cases": 0,
+            "deleted_labels": 0,
+            "deleted_mappings": 0,
+        }
+        for version in versions:
+            partial = self._delete_version(version)
+            for key, value in partial.items():
+                summary[key] += value
+
+        self.uow.benchmarks.delete(benchmark)
+        self.uow.session.flush()
+        return summary
+
+    def _assert_version_unused(self, version_id: int) -> None:
+        used = self.uow.evaluation_tasks.count(benchmark_version_id=version_id)
+        if used:
+            raise ValueError(
+                f"该 Benchmark 版本已被 {used} 个评测任务引用，无法删除。"
+                "请先删除或重建这些评测任务。"
+            )
+
+    def _delete_version(self, version) -> dict[str, int]:
+        test_cases = self.uow.test_cases.list(
+            page=1,
+            page_size=100000,
+            benchmark_version_id=version.id,
+        )
+
+        deleted_labels = 0
+        for test_case in test_cases:
+            labels = self.uow.test_case_risk_labels.list(
+                page=1,
+                page_size=1000,
+                test_case_id=test_case.id,
+            )
+            for label in labels:
+                self.uow.test_case_risk_labels.delete(label)
+                deleted_labels += 1
+            self.uow.test_cases.delete(test_case)
+
+        mappings = self.uow.benchmark_risk_mappings.list(
+            page=1,
+            page_size=100000,
+            benchmark_version_id=version.id,
+        )
+        for mapping in mappings:
+            self.uow.benchmark_risk_mappings.delete(mapping)
+
+        source_file_id = version.source_file_id
+        self.uow.benchmark_versions.delete(version)
+        self.uow.session.flush()
+
+        if source_file_id:
+            still_used = self.uow.benchmark_versions.count(source_file_id=source_file_id)
+            if not still_used:
+                stored_file = self.uow.files.get(source_file_id)
+                if stored_file is not None:
+                    try:
+                        file_path = Path(stored_file.stored_path)
+                        if file_path.exists():
+                            file_path.unlink()
+                    except OSError:
+                        pass
+                    self.uow.files.delete(stored_file)
+                    self.uow.session.flush()
+
+        return {
+            "deleted_versions": 1,
+            "deleted_test_cases": len(test_cases),
+            "deleted_labels": deleted_labels,
+            "deleted_mappings": len(mappings),
+        }
 
 
 class RiskService(BaseService):

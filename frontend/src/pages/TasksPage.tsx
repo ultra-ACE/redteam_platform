@@ -3,7 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { EyeOutlined, PlusOutlined, RedoOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { Button, Form, Input, InputNumber, Modal, Progress, Select, Space, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createTask, listBenchmarks, listBenchmarkVersions, listModels, listTasks, retryFailedTask, startTask } from '../api';
+import {
+  createTask,
+  listAttackTemplates,
+  listBenchmarkVersions,
+  listBenchmarks,
+  listJudgeProfiles,
+  listModels,
+  listTasks,
+  retryFailedTask,
+  startTask,
+} from '../api';
 import { PageHeader, TaskStatusTag } from '../components/ui';
 import type { EvaluationTask } from '../types/api';
 import { formatDateTime } from '../utils/format';
@@ -22,6 +32,14 @@ export function TasksPage() {
     queryKey: ['benchmark-versions', benchmarkId],
     queryFn: () => listBenchmarkVersions(benchmarkId),
     enabled: Boolean(benchmarkId),
+  });
+  const templatesQuery = useQuery({
+    queryKey: ['attack-templates', 'tasks'],
+    queryFn: () => listAttackTemplates({ page_size: 200 }),
+  });
+  const judgesQuery = useQuery({
+    queryKey: ['judge-profiles', 'tasks'],
+    queryFn: () => listJudgeProfiles({ page_size: 200 }),
   });
 
   const createMutation = useMutation({
@@ -155,8 +173,8 @@ export function TasksPage() {
                   max_tokens: values.max_tokens ?? 1024,
                 },
               })),
-              attack_template_ids: [],
-              judge_profile_ids: [],
+              attack_template_ids: values.attack_template_ids ?? [],
+              judge_profile_ids: values.judge_profile_ids ?? [],
               rule_set_ids: [],
               execution: {
                 repeat: values.repeat,
@@ -211,6 +229,38 @@ export function TasksPage() {
               options={(modelsQuery.data?.items ?? [])
                 .filter((item) => item.usage_scope === 'target' || item.usage_scope === 'both')
                 .map((item) => ({ value: item.model_id, label: `${item.name} · ${item.adapter_type}` }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="attack_template_ids"
+            label="攻击模板"
+            extra="不选则使用原始 Prompt 直接请求（相当于 direct_request 基线）"
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="选择一个或多个攻击模板"
+              loading={templatesQuery.isLoading}
+              options={(templatesQuery.data?.items ?? []).map((item) => ({
+                value: item.attack_template_id,
+                label: `${item.name} · ${item.version}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="judge_profile_ids"
+            label="Judge 配置"
+            extra="不选则只使用引擎内置的默认规则 Judge"
+          >
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="选择一个或多个 Judge（建议同时选规则 Judge 和模型 Judge）"
+              loading={judgesQuery.isLoading}
+              options={(judgesQuery.data?.items ?? []).map((item) => ({
+                value: item.judge_profile_id,
+                label: `${item.name} · ${item.judge_type}`,
+              }))}
             />
           </Form.Item>
           <Form.Item name="risk_taxonomy_id" label="风险体系 ID" rules={[{ required: true }]}>

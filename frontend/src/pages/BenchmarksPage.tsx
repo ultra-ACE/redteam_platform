@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
-import { InboxOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, InboxOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
   Card,
   Col,
-  Descriptions,
   Form,
   Input,
   InputNumber,
   List,
   Modal,
+  Popconfirm,
   Row,
   Space,
   Table,
@@ -20,12 +20,23 @@ import {
 } from 'antd';
 import type { UploadFile } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { importBenchmark, listBenchmarks, listBenchmarkVersions, listTestCases } from '../api';
+import {
+  deleteBenchmark,
+  deleteBenchmarkVersion,
+  importBenchmark,
+  listBenchmarks,
+  listBenchmarkVersions,
+  listTestCases,
+} from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { Benchmark, BenchmarkImportResult, BenchmarkVersion } from '../types/api';
 import { formatDateTime } from '../utils/format';
 
 const { Dragger } = Upload;
+
+/** 多文件导入时，用文件名生成版本号，例如 harmbench_text_test.jsonl -> harmbench_text_test */
+const fileVersionName = (fileName: string) =>
+  fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 60) || 'v1';
 
 export function BenchmarksPage() {
   const queryClient = useQueryClient();
@@ -33,7 +44,7 @@ export function BenchmarksPage() {
   const [selectedVersion, setSelectedVersion] = useState<BenchmarkVersion | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [importResult, setImportResult] = useState<BenchmarkImportResult | null>(null);
+  const [importResults, setImportResults] = useState<Array<BenchmarkImportResult & { file_name: string }>>([]);
   const [form] = Form.useForm();
 
   const benchmarksQuery = useQuery({ queryKey: ['benchmarks'], queryFn: () => listBenchmarks({ page_size: 200 }) });
@@ -49,10 +60,64 @@ export function BenchmarksPage() {
   });
 
   const importMutation = useMutation({
-    mutationFn: importBenchmark,
-    onSuccess: (result) => {
-      setImportResult(result);
-      message.success(`成功导入 ${result.imported_count} 条测试用例`);
+    mutationFn: async (payloads: Array<{ formData: FormData; file_name: string }>) => {
+      const results: Array<BenchmarkImportResult & { file_name: string }> = [];
+      for (const payload of payloads) {
+        try {
+          const result = await importBenchmark(payload.formData);
+          results.push({ ...result, file_name: payload.file_name });
+        } catch (error) {
+          const text = error instanceof Error ? error.message : '导入失败';
+          results.push({
+            benchmark_id: 0,
+            benchmark_version_id: 0,
+            imported_count: 0,
+            failed_count: 1,
+            unresolved_labels: [],
+            errors: [{ row_number: 0, message: text }],
+            file_name: payload.file_name,
+          });
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      setImportResults(results);
+      const succeeded = results.filter((item) => item.imported_count > 0).length;
+      const totalImported = results.reduce((sum, item) => sum + item.imported_count, 0);
+      if (succeeded === results.length) {
+        message.success(`${results.length} 个文件导入完成，共 ${totalImported} 条测试用例`);
+      } else {
+        message.warning(`${results.length} 个文件中成功 ${succeeded} 个，请查看导入结果`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
+      queryClient.invalidateQueries({ queryKey: ['benchmark-versions'] });
+      queryClient.invalidateQueries({ queryKey: ['test-cases'] });
+    },
+  });
+
+  const deleteBenchmarkMutation = useMutation({
+    mutationFn: deleteBenchmark,
+    onSuccess: (summary) => {
+      message.success(
+        `已删除 ${summary.deleted_versions} 个版本、${summary.deleted_test_cases} 条测试用例`,
+      );
+      setSelectedBenchmark(null);
+      setSelectedVersion(null);
+      queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
+      queryClient.invalidateQueries({ queryKey: ['benchmark-versions'] });
+      queryClient.invalidateQueries({ queryKey: ['test-cases'] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  const deleteVersionMutation = useMutation({
+    mutationFn: deleteBenchmarkVersion,
+    onSuccess: (summary) => {
+      message.success(
+        `已删除 ${summary.deleted_test_cases} 条测试用例、${summary.deleted_mappings} 条风险映射`,
+      );
+      setSelectedVersion(null);
       queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
       queryClient.invalidateQueries({ queryKey: ['benchmark-versions'] });
       queryClient.invalidateQueries({ queryKey: ['test-cases'] });
@@ -66,23 +131,40 @@ export function BenchmarksPage() {
 
   const selectedBenchmarkName = useMemo(() => selectedBenchmark?.name ?? '未选择 Benchmark', [selectedBenchmark]);
 
+  const resetImport = () => {
+    setImportResults([]);
+    setFileList([]);
+    form.resetFields();
+  };
+
   const handleImport = () => {
+    const files = fileList
+      .map((item) => item.originFileObj)
+      .filter((item): item is NonNullable<UploadFile['originFileObj']> => Boolean(item));
+    if (!files.length) {
+      message.warning('请选择数据集文件');
+      return;
+    }
     form
       .validateFields()
       .then((values) => {
-        const file = fileList[0]?.originFileObj;
-        if (!file) {
-          message.warning('请选择数据集文件');
+        const benchmarkName = String(values.name ?? '').trim();
+        if (!benchmarkName || benchmarkName === 'undefined') {
+          message.error('请填写有效的 Benchmark 名称');
           return;
         }
-        const formData = new FormData();
-        formData.append('name', values.name);
-        formData.append('version', values.version);
-        if (values.risk_taxonomy_id) {
-          formData.append('risk_taxonomy_id', String(values.risk_taxonomy_id));
-        }
-        formData.append('file', file);
-        importMutation.mutate(formData);
+        const payloads = files.map((file) => {
+          const formData = new FormData();
+          formData.append('name', benchmarkName);
+          // 单文件使用表单里的版本号；多文件按文件名自动生成版本号
+          formData.append('version', files.length === 1 ? values.version : fileVersionName(file.name));
+          if (values.risk_taxonomy_id) {
+            formData.append('risk_taxonomy_id', String(values.risk_taxonomy_id));
+          }
+          formData.append('file', file);
+          return { formData, file_name: file.name };
+        });
+        importMutation.mutate(payloads);
       })
       .catch(() => undefined);
   };
@@ -101,7 +183,7 @@ export function BenchmarksPage() {
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
-                setImportResult(null);
+                setImportResults([]);
                 setFileList([]);
                 form.resetFields();
                 setImportOpen(true);
@@ -141,6 +223,22 @@ export function BenchmarksPage() {
                         </Space>
                       }
                     />
+                    <Popconfirm
+                      title="删除该 Benchmark？"
+                      description="将同时删除它的全部版本、测试用例和风险映射，无法恢复。"
+                      okText="删除"
+                      cancelText="取消"
+                      okButtonProps={{ danger: true, loading: deleteBenchmarkMutation.isPending }}
+                      onConfirm={() => deleteBenchmarkMutation.mutate(item.benchmark_id)}
+                    >
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                    </Popconfirm>
                   </List.Item>
                 )}
               />
@@ -170,6 +268,28 @@ export function BenchmarksPage() {
                   { title: '校验和', dataIndex: 'checksum', render: (value) => <code>{String(value ?? '').slice(0, 16)}…</code> },
                   { title: '状态', dataIndex: 'status', render: (value) => <Tag color={value === 'ready' ? 'success' : 'processing'}>{value}</Tag> },
                   { title: '导入时间', dataIndex: 'imported_at', render: formatDateTime },
+                  {
+                    title: '操作',
+                    width: 80,
+                    render: (_, record) => (
+                      <Popconfirm
+                        title="删除该版本？"
+                        description="将删除该版本的全部测试用例和风险映射，无法恢复。"
+                        okText="删除"
+                        cancelText="取消"
+                        okButtonProps={{ danger: true, loading: deleteVersionMutation.isPending }}
+                        onConfirm={() => deleteVersionMutation.mutate(record.benchmark_version_id)}
+                      >
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      </Popconfirm>
+                    ),
+                  },
                 ]}
               />
             ) : (
@@ -215,34 +335,60 @@ export function BenchmarksPage() {
         onCancel={() => setImportOpen(false)}
         footer={[
           <Button key="cancel" onClick={() => setImportOpen(false)}>关闭</Button>,
+          importResults.length ? (
+            <Button key="again" onClick={resetImport}>
+              继续导入
+            </Button>
+          ) : null,
           <Button key="submit" type="primary" loading={importMutation.isPending} onClick={handleImport}>
             开始导入
           </Button>,
         ]}
         destroyOnClose
       >
-        {importResult ? (
+        {importResults.length ? (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <Alert
-              type={importResult.failed_count ? 'warning' : 'success'}
+              type={importResults.some((item) => item.imported_count === 0) ? 'warning' : 'success'}
               showIcon
               message="导入完成"
-              description={`成功 ${importResult.imported_count} 条，失败 ${importResult.failed_count} 条，未映射标签 ${importResult.unresolved_labels.length} 个。`}
+              description={`共 ${importResults.length} 个文件，成功导入 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条用例。`}
             />
-            <Descriptions column={2} size="small">
-              <Descriptions.Item label="Benchmark ID">{importResult.benchmark_id}</Descriptions.Item>
-              <Descriptions.Item label="版本 ID">{importResult.benchmark_version_id}</Descriptions.Item>
-              <Descriptions.Item label="未映射标签" span={2}>
-                {importResult.unresolved_labels.length ? importResult.unresolved_labels.join(', ') : '无'}
-              </Descriptions.Item>
-            </Descriptions>
-            {importResult.errors.length ? (
+            <Table
+              rowKey="file_name"
+              size="small"
+              pagination={false}
+              dataSource={importResults}
+              columns={[
+                { title: '文件', dataIndex: 'file_name' },
+                { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 90 },
+                { title: '成功', dataIndex: 'imported_count', width: 80 },
+                { title: '失败', dataIndex: 'failed_count', width: 80 },
+                {
+                  title: '未映射标签',
+                  render: (_, record) =>
+                    record.unresolved_labels.length ? (
+                      <Space wrap>
+                        {record.unresolved_labels.map((label) => (
+                          <Tag key={label} color="warning">{label}</Tag>
+                        ))}
+                      </Space>
+                    ) : (
+                      <Tag color="success">无</Tag>
+                    ),
+                },
+              ]}
+            />
+            {importResults.some((item) => item.errors.length) ? (
               <Table
-                rowKey={(record) => `${record.row_number}-${record.message}`}
+                rowKey={(record) => `${record.file_name}-${record.row_number}-${record.message}`}
                 size="small"
-                dataSource={importResult.errors}
                 pagination={false}
+                dataSource={importResults.flatMap((item) =>
+                  item.errors.map((err) => ({ ...err, file_name: item.file_name })),
+                )}
                 columns={[
+                  { title: '文件', dataIndex: 'file_name', width: 220 },
                   { title: '行号', dataIndex: 'row_number', width: 90 },
                   { title: '错误', dataIndex: 'message' },
                 ]}
@@ -258,7 +404,12 @@ export function BenchmarksPage() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item name="version" label="版本" rules={[{ required: true }]}>
+                <Form.Item
+                  name="version"
+                  label="版本"
+                  rules={fileList.length > 1 ? [] : [{ required: true }]}
+                  extra={fileList.length > 1 ? '已选择多个文件，将按各自文件名自动生成版本号' : undefined}
+                >
                   <Input placeholder="v1" />
                 </Form.Item>
               </Col>
@@ -269,14 +420,15 @@ export function BenchmarksPage() {
             <Form.Item label="数据集文件" required>
               <Dragger
                 beforeUpload={() => false}
-                maxCount={1}
+                multiple
+                maxCount={10}
                 fileList={fileList}
                 onChange={({ fileList: next }) => setFileList(next)}
                 accept=".jsonl,.ndjson,.json,.csv"
               >
                 <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-                <p className="ant-upload-text">点击或拖拽数据集文件到此处</p>
-                <p className="ant-upload-hint">支持 JSONL、JSON、CSV，默认单文件不超过 100 MB</p>
+                <p className="ant-upload-text">点击或拖拽数据集文件到此处（可多选）</p>
+                <p className="ant-upload-hint">支持 JSONL、JSON、CSV，可一次选择最多 10 个文件，每个文件导入为一个独立版本</p>
               </Dragger>
             </Form.Item>
           </Form>
