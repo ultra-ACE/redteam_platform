@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeftOutlined, FileTextOutlined, RedoOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Descriptions, Flex, Progress, Row, Space, Spin, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,11 +15,35 @@ const TERMINAL_TASK_STATUSES = new Set(['succeeded', 'partially_failed', 'failed
 export function TaskDetailPage() {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [liveConnected, setLiveConnected] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
-  const [detailAttemptId, setDetailAttemptId] = useState<number | null>(null);
+  const [detailAttemptId, setDetailAttemptId] = useState<number | null>(() => {
+    const raw = Number(searchParams.get('attempt'));
+    return Number.isFinite(raw) && raw > 0 ? raw : null;
+  });
   const id = Number(taskId);
+
+  /** 支持报告里的 /tasks/{id}?attempt={attemptId} 深链，直接展开对应尝试详情。 */
+  useEffect(() => {
+    const raw = Number(searchParams.get('attempt'));
+    setDetailAttemptId(Number.isFinite(raw) && raw > 0 ? raw : null);
+  }, [searchParams]);
+
+  const openAttemptDetail = (attemptId: number) => {
+    setDetailAttemptId(attemptId);
+    const next = new URLSearchParams(searchParams);
+    next.set('attempt', String(attemptId));
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeAttemptDetail = () => {
+    setDetailAttemptId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete('attempt');
+    setSearchParams(next, { replace: true });
+  };
 
   const statusQuery = useQuery({ queryKey: ['task-status', id], queryFn: () => getTaskStatus(id), enabled: Boolean(id) });
   const resultsQuery = useQuery({ queryKey: ['task-results', id], queryFn: () => getTaskResults(id, { page_size: 100 }), enabled: Boolean(id) });
@@ -221,7 +245,7 @@ export function TaskDetailPage() {
           dataSource={resultsQuery.data?.items ?? []}
           pagination={{ pageSize: 10 }}
           onRow={(record) => ({
-            onClick: () => setDetailAttemptId(record.attempt_id),
+            onClick: () => openAttemptDetail(record.attempt_id),
             style: { cursor: 'pointer' },
           })}
           columns={[
@@ -259,7 +283,7 @@ export function TaskDetailPage() {
         />
       </Card>
 
-      <AttemptDetailDrawer attemptId={detailAttemptId} onClose={() => setDetailAttemptId(null)} />
+      <AttemptDetailDrawer attemptId={detailAttemptId} onClose={closeAttemptDetail} />
     </div>
   );
 }
