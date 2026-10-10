@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: llm-eval-postgres
+    environment:
+      POSTGRES_USER: llm_eval
+      POSTGRES_PASSWORD: llm_eval
+      POSTGRES_DB: llm_eval
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llm_eval -d llm_eval"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: llm-eval-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    image: llm-eval-backend:local
+    build:
+      context: ./backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://llm_eval:llm_eval@postgres:5432/llm_eval
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DATA_DIR: /app/data
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      TZ: Asia/Shanghai
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: llm-eval-backend:local
+    build:
+      context: ./backend
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://llm_eval:llm_eval@postgres:5432/llm_eval
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DATA_DIR: /app/data
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  worker:
+    image: llm-eval-backend:local
+    build:
+      context: ./backend
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://llm_eval:llm_eval@postgres:5432/llm_eval
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DATA_DIR: /app/data
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      TZ: Asia/Shanghai
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  frontend:
+    image: llm-eval-frontend:local
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  appdata:
