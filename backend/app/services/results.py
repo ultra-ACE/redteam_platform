@@ -12,11 +12,17 @@ from app.db.models import (
     TestCaseRiskLabel,
 )
 from app.schemas import (
+    AttemptDetail,
     EvaluationResult,
+    JudgeDetail,
     JudgeSummary,
+    ManualReview as ManualReviewSchema,
     PaginatedData,
+    RiskAssessment as RiskAssessmentSchema,
     RiskCategoryRef,
+    RiskDimension,
     RiskSummary,
+    RuleValidationDetail,
     RuleValidationSummary,
 )
 from app.services.base import BaseService
@@ -125,12 +131,147 @@ class EvaluationResultService(BaseService):
             model_id=attempt.model_id,
             attack_template_id=task_case.attack_template_id,
             status=attempt.status,
+            prompt_excerpt=(test_case.prompt or "")[:200],
             model_output_excerpt=(attempt.output_text or "")[:500],
             normalized_risk_categories=categories,
             judge=judge_summary,
             rule_validation=rule_summary,
             risk=risk_summary,
             manual_review_status=manual_review.status if manual_review else "none",
+        )
+
+    def get_attempt_detail(self, attempt_id: int) -> AttemptDetail | None:
+        """组装单次尝试的完整证据链，供前端结果表格展开查看。"""
+        attempt = self.uow.task_attempts.get(attempt_id)
+        if attempt is None:
+            return None
+
+        task_case = self.uow.task_cases.get(attempt.task_case_id)
+        test_case = self.uow.test_cases.get(task_case.test_case_id) if task_case else None
+        model = self.uow.models.get(attempt.model_id)
+        template = (
+            self.uow.attack_templates.get(task_case.attack_template_id)
+            if task_case is not None and task_case.attack_template_id
+            else None
+        )
+
+        judge_result = self._latest_judge_result(attempt.id)
+        manual_review = self._latest_manual_review(attempt.id)
+        categories = self._risk_categories(judge_result, test_case.id if test_case else 0)
+
+        return AttemptDetail(
+            attempt_id=attempt.id,
+            task_id=task_case.task_id if task_case else None,
+            task_case_id=attempt.task_case_id,
+            test_case_id=test_case.id if test_case else None,
+            external_id=test_case.external_id if test_case else None,
+            model_id=attempt.model_id,
+            model_name=model.name if model else None,
+            attack_template_id=task_case.attack_template_id if task_case else None,
+            attack_template_name=template.name if template else None,
+            attempt_no=attempt.attempt_no,
+            status=attempt.status,
+            prompt=test_case.prompt if test_case else None,
+            system_prompt=test_case.system_prompt if test_case else None,
+            input_snapshot=attempt.input_snapshot,
+            model_output=attempt.output_text,
+            latency_ms=attempt.latency_ms,
+            prompt_tokens=attempt.prompt_tokens,
+            completion_tokens=attempt.completion_tokens,
+            error_code=attempt.error_code,
+            error_message=attempt.error_message,
+            started_at=attempt.started_at,
+            finished_at=attempt.finished_at,
+            normalized_risk_categories=categories,
+            judge=self._build_judge_detail(judge_result),
+            rule_validations=self._build_rule_details(attempt.id),
+            risk=self._build_risk_detail(attempt.id),
+            manual_review=ManualReviewSchema.model_validate(manual_review) if manual_review else None,
+        )
+
+    def _build_judge_detail(self, judge_result: JudgeResult | None) -> JudgeDetail | None:
+        if judge_result is None:
+            return None
+
+        profile = self.uow.judge_profiles.get(judge_result.judge_profile_id)
+        category = (
+            self.uow.risk_categories.get(judge_result.risk_category_id)
+            if judge_result.risk_category_id
+            else None
+        )
+
+        return JudgeDetail(
+            judge_result_id=judge_result.id,
+            judge_profile_id=judge_result.judge_profile_id,
+            judge_profile_name=profile.name if profile else None,
+            judge_type=profile.judge_type if profile else None,
+            strategy=profile.strategy if profile else None,
+            verdict=judge_result.verdict or "uncertain",
+            risk_category=RiskCategoryRef(code=category.code, name=category.name) if category else None,
+            confidence=judge_result.confidence,
+            trust_score=judge_result.trust_score,
+            trust_breakdown=judge_result.trust_breakdown,
+            reasoning=judge_result.reasoning,
+            evidence=judge_result.evidence,
+            raw_output=judge_result.raw_output,
+        )
+
+    def _build_rule_details(self, attempt_id: int) -> list[RuleValidationDetail]:
+        rows = self.uow.rule_validation_results.list(
+            page=1,
+            page_size=1000,
+            task_attempt_id=attempt_id,
+        )
+        details: list[RuleValidationDetail] = []
+        for row in rows:
+            definition = self.uow.rule_definitions.get(row.rule_definition_id)
+            details.append(
+                RuleValidationDetail(
+                    rule_definition_id=row.rule_definition_id,
+                    rule_code=definition.code if definition else None,
+                    passed=row.passed,
+                    severity=row.severity,
+                    hit_count=row.hit_count,
+                    matched_evidence=row.matched_evidence,
+                )
+            )
+        return details
+
+    def _build_risk_detail(self, attempt_id: int) -> RiskAssessmentSchema | None:
+        assessments = self.uow.risk_assessments.list(
+            page=1,
+            page_size=1,
+            task_attempt_id=attempt_id,
+            order_by=RiskAssessment.id.desc(),
+        )
+        if not assessments:
+            return None
+        assessment = assessments[0]
+        dimension_rows = self.uow.risk_dimension_scores.list(
+            page=1,
+            page_size=100,
+            risk_assessment_id=assessment.id,
+        )
+        return RiskAssessmentSchema(
+            attempt_id=assessment.task_attempt_id,
+            overall_score=assessment.overall_score,
+            risk_level=assessment.risk_level,
+            confidence=assessment.confidence,
+            uncertainty=assessment.uncertainty,
+            judge_trust_score=assessment.judge_trust_score or 0.0,
+            score_version=assessment.score_version,
+            dimensions=[
+                RiskDimension(
+                    dimension_code=item.dimension_code,
+                    score=item.score,
+                    weight=item.weight,
+                    source=item.source,
+                    evidence=item.evidence,
+                )
+                for item in dimension_rows
+            ],
+            rule_override_applied=assessment.rule_override_applied,
+            calculated_at=assessment.calculated_at,
         )
 
     def _latest_judge_result(self, attempt_id: int) -> JudgeResult | None:

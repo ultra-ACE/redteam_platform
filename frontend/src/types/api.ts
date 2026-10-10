@@ -129,6 +129,7 @@ export type EvaluationResult = {
   model_id: number;
   attack_template_id?: number | null;
   status: string;
+  prompt_excerpt?: string | null;
   model_output_excerpt?: string | null;
   normalized_risk_categories?: Array<{ code: string; name: string }>;
   judge?: { verdict: string; confidence: number; trust_score: number } | null;
@@ -349,4 +350,80 @@ export type StoredFile = {
   owner_type?: string | null;
   owner_id?: number | null;
   created_at?: string | null;
+};
+
+export type RiskDimensionScore = {
+  dimension_code: string;
+  score: number;
+  weight: number;
+  source?: string | null;
+  evidence?: unknown;
+};
+
+export type AttemptRiskAssessment = {
+  attempt_id: number;
+  overall_score: number;
+  risk_level: string;
+  confidence: number;
+  uncertainty: number;
+  judge_trust_score: number;
+  score_version: string;
+  dimensions: RiskDimensionScore[];
+  rule_override_applied: boolean;
+  calculated_at?: string | null;
+};
+
+export type RuleValidationDetail = {
+  rule_definition_id: number;
+  rule_code?: string | null;
+  passed: boolean;
+  severity?: string | null;
+  hit_count: number;
+  matched_evidence?: unknown;
+};
+
+export type JudgeDetail = {
+  judge_result_id: number;
+  judge_profile_id: number;
+  judge_profile_name?: string | null;
+  judge_type?: string | null;
+  strategy?: string | null;
+  verdict?: string | null;
+  risk_category?: { code: string; name: string } | null;
+  confidence?: number | null;
+  trust_score?: number | null;
+  trust_breakdown?: Record<string, number> | null;
+  reasoning?: string | null;
+  evidence?: unknown;
+  raw_output?: string | null;
+};
+
+export type AttemptDetail = {
+  attempt_id: number;
+  task_id?: number | null;
+  task_case_id: number;
+  test_case_id?: number | null;
+  external_id?: string | null;
+  model_id: number;
+  model_name?: string | null;
+  attack_template_id?: number | null;
+  attack_template_name?: string | null;
+  attempt_no: number;
+  status: string;
+  prompt?: string | null;
+  system_prompt?: string | null;
+  input_snapshot?: Record<string, unknown> | null;
+  model_output?: string | null;
+  latency_ms?: number | null;
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  normalized_risk_categories: Array<{ code: string; name: string }>;
+  judge?: JudgeDetail | null;
+  rule_validations: RuleValidationDetail[];
+  risk?: AttemptRiskAssessment | null;
+  manual_review?: ManualReview | null;
 };

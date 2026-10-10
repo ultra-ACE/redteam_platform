@@ -9,6 +9,7 @@ from app.api.utils import get_operator, ok, require_local_token
 from app.db.session import SessionLocal
 from app.schemas import (
     ApiResponse,
+    AttemptDetail,
     EvaluationResult,
     EvaluationTask,
     EvaluationTaskCreateRequest,
@@ -119,6 +120,24 @@ async def list_evaluation_results(
         risk_category_code=risk_category_code,
     )
     return ok(result.model_dump())
+
+
+@router.get(
+    "/task-attempts/{attempt_id}",
+    response_model=ApiResponse[AttemptDetail],
+    operation_id="getTaskAttemptDetail",
+    tags=["评测任务"],
+)
+async def get_task_attempt_detail(
+    attempt_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    """返回单次尝试的完整证据链：提示词、模型输出、Judge 详情、规则命中、六维风险与复核状态。"""
+    detail = EvaluationResultService(uow).get_attempt_detail(attempt_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="task attempt not found")
+    return ok(detail.model_dump())
 
 
 @router.post(

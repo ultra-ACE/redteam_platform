@@ -250,6 +250,7 @@ class EvaluationResult(ORMSchema):
     model_id: int
     attack_template_id: int | None = None
     status: AttemptStatus
+    prompt_excerpt: str | None = None
     model_output_excerpt: str | None = None
     normalized_risk_categories: list[RiskCategoryRef] = Field(default_factory=list)
     judge: JudgeSummary | None = None
@@ -300,6 +301,64 @@ class ManualReviewDetail(ManualReview):
     rule_highest_severity: str | None = None
     original_risk_score: float | None = None
     original_risk_level: str | None = None
+
+
+class RuleValidationDetail(ORMSchema):
+    rule_definition_id: int
+    rule_code: str | None = None
+    passed: bool = True
+    severity: RiskLevel | None = None
+    hit_count: int = 0
+    matched_evidence: Any = None
+
+
+class JudgeDetail(ORMSchema):
+    judge_result_id: int
+    judge_profile_id: int
+    judge_profile_name: str | None = None
+    judge_type: JudgeType | None = None
+    strategy: str | None = None
+    verdict: JudgeVerdict | None = None
+    risk_category: RiskCategoryRef | None = None
+    confidence: float | None = None
+    trust_score: float | None = None
+    trust_breakdown: dict[str, Any] | None = None
+    reasoning: str | None = None
+    evidence: Any = None
+    raw_output: str | None = None
+
+
+class AttemptDetail(ORMSchema):
+    """单次尝试的完整证据链：提示词 → 模型输出 → Judge → 规则 → 风险 → 复核。"""
+
+    attempt_id: int
+    task_id: int | None = None
+    task_case_id: int
+    test_case_id: int | None = None
+    external_id: str | None = None
+    model_id: int
+    model_name: str | None = None
+    attack_template_id: int | None = None
+    attack_template_name: str | None = None
+    attempt_no: int = 1
+    status: AttemptStatus
+    prompt: str | None = None
+    system_prompt: str | None = None
+    rendered_prompt: str | None = None
+    input_snapshot: dict[str, Any] | None = None
+    model_output: str | None = None
+    latency_ms: int | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    normalized_risk_categories: list[RiskCategoryRef] = Field(default_factory=list)
+    judge: JudgeDetail | None = None
+    rule_validations: list[RuleValidationDetail] = Field(default_factory=list)
+    risk: RiskAssessment | None = None
+    manual_review: ManualReview | None = None
 
 
 class Statistics(ORMSchema):

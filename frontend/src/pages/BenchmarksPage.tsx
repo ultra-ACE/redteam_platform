@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { DeleteOutlined, InboxOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -45,6 +45,7 @@ export function BenchmarksPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importResults, setImportResults] = useState<Array<BenchmarkImportResult & { file_name: string }>>([]);
+  const [testCaseKeyword, setTestCaseKeyword] = useState('');
   const [form] = Form.useForm();
 
   const benchmarksQuery = useQuery({ queryKey: ['benchmarks'], queryFn: () => listBenchmarks({ page_size: 200 }) });
@@ -130,6 +131,17 @@ export function BenchmarksPage() {
   const testCases = testCasesQuery.data?.items ?? [];
 
   const selectedBenchmarkName = useMemo(() => selectedBenchmark?.name ?? '未选择 Benchmark', [selectedBenchmark]);
+
+  /** 用例表格的本地筛选：支持按外部 ID、提示词正文、原始标签和数字 ID 查找。 */
+  const filteredTestCases = useMemo(() => {
+    const normalized = testCaseKeyword.trim().toLowerCase();
+    if (!normalized) return testCases;
+    return testCases.filter((item) =>
+      [item.external_id, item.prompt, item.source_label, String(item.test_case_id)].some((value) =>
+        (value ?? '').toLowerCase().includes(normalized),
+      ),
+    );
+  }, [testCaseKeyword, testCases]);
 
   const resetImport = () => {
     setImportResults([]);
@@ -300,16 +312,34 @@ export function BenchmarksPage() {
       </Row>
 
       {selectedVersion ? (
-        <Card className="section-card" title={`测试用例 · 版本 ${selectedVersion.version}`} extra={<Tag color="blue">{testCases.length} 条</Tag>}>
+        <Card
+          className="section-card"
+          title={`测试用例 · 版本 ${selectedVersion.version}`}
+          extra={
+            <Space>
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder="按外部 ID / 提示词 / 标签搜索"
+                style={{ width: 280 }}
+                value={testCaseKeyword}
+                onChange={(event) => setTestCaseKeyword(event.target.value)}
+              />
+              <Tag color="blue">
+                {filteredTestCases.length} / {testCases.length} 条
+              </Tag>
+            </Space>
+          }
+        >
           <Table
             rowKey="test_case_id"
             loading={testCasesQuery.isLoading}
-            dataSource={testCases}
-            pagination={{ pageSize: 10 }}
+            dataSource={filteredTestCases}
+            pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }}
             columns={[
               { title: 'ID', dataIndex: 'test_case_id', width: 80 },
               { title: '外部 ID', dataIndex: 'external_id', width: 140 },
-              { title: 'Prompt', dataIndex: 'prompt', ellipsis: true },
+              { title: 'Prompt', dataIndex: 'prompt', ellipsis: { showTitle: true } },
               { title: '原始标签', dataIndex: 'source_label', width: 140 },
               {
                 title: '风险类别',

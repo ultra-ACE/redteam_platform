@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { getTaskEventsUrl, getTaskResults, getTaskStatistics, getTaskStatus, retryFailedTask } from '../api';
 import type { TaskStatusData } from '../types/api';
+import { AttemptDetailDrawer } from '../components/AttemptDetailDrawer';
 import { JudgeVerdictTag, PageHeader, RiskLevelTag, TaskStatusTag } from '../components/ui';
 import { formatDateTime, formatPercent, formatScore, riskColor } from '../utils/format';
 
@@ -17,6 +18,7 @@ export function TaskDetailPage() {
   const queryClient = useQueryClient();
   const [liveConnected, setLiveConnected] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
+  const [detailAttemptId, setDetailAttemptId] = useState<number | null>(null);
   const id = Number(taskId);
 
   const statusQuery = useQuery({ queryKey: ['task-status', id], queryFn: () => getTaskStatus(id), enabled: Boolean(id) });
@@ -203,15 +205,34 @@ export function TaskDetailPage() {
         </Col>
       </Row>
 
-      <Card className="section-card" title="逐条评测结果" extra={<Tag color="blue">最多展示 100 条</Tag>}>
+      <Card
+        className="section-card"
+        title="逐条评测结果"
+        extra={
+          <Space>
+            <Tag color="blue">最多展示 100 条</Tag>
+            <Tag color="purple">点击任意行查看完整证据链</Tag>
+          </Space>
+        }
+      >
         <Table
           rowKey="attempt_id"
           loading={resultsQuery.isLoading}
           dataSource={resultsQuery.data?.items ?? []}
           pagination={{ pageSize: 10 }}
+          onRow={(record) => ({
+            onClick: () => setDetailAttemptId(record.attempt_id),
+            style: { cursor: 'pointer' },
+          })}
           columns={[
             { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
             { title: '用例 ID', dataIndex: 'external_id' },
+            {
+              title: '测试 Prompt',
+              dataIndex: 'prompt_excerpt',
+              ellipsis: { showTitle: true },
+              render: (value: string | null | undefined) => value || '-',
+            },
             { title: '模型 ID', dataIndex: 'model_id', width: 90 },
             {
               title: 'Judge',
@@ -237,6 +258,8 @@ export function TaskDetailPage() {
           ]}
         />
       </Card>
+
+      <AttemptDetailDrawer attemptId={detailAttemptId} onClose={() => setDetailAttemptId(null)} />
     </div>
   );
 }

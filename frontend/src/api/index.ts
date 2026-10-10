@@ -5,6 +5,7 @@ import type {
   AttackTemplate,
   AttackTemplatePreviewResult,
   AttackTemplateValidationResult,
+  AttemptDetail,
   AuditLog,
   Benchmark,
   BenchmarkImportResult,
@@ -136,6 +137,11 @@ export const getTaskResults = async (taskId: number, params?: Record<string, unk
 
 export const getTaskStatistics = async (taskId: number) => {
   const { data } = await apiClient.get<ApiEnvelope<Statistics>>(`/evaluation-tasks/${taskId}/statistics`);
+  return data.data;
+};
+
+export const getTaskAttemptDetail = async (attemptId: number) => {
+  const { data } = await apiClient.get<ApiEnvelope<AttemptDetail>>(`/task-attempts/${attemptId}`);
   return data.data;
 };
 
