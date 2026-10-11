@@ -426,13 +426,6 @@ export const listFiles = async (params?: Record<string, unknown>) => {
   return data.data;
 };
 
-export const uploadFile = async (payload: FormData) => {
-  const { data } = await apiClient.post<ApiEnvelope<StoredFile>>('/files', payload, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-  return data.data;
-};
-
 export const getFile = async (fileId: number) => {
   const { data } = await apiClient.get<ApiEnvelope<StoredFile>>(`/files/${fileId}`);
   return data.data;

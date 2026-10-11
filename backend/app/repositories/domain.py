@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.models import (
     AttackMethod,
@@ -8,7 +8,6 @@ from app.db.models import (
     BenchmarkRiskMapping,
     BenchmarkVersion,
     EvaluationTask,
-    IdempotencyKey,
     JudgeProfile,
     JudgeResult,
     ManualReview,
@@ -144,6 +143,20 @@ class StatisticsSnapshotRepository(BaseRepository[StatisticsSnapshot]):
 class ReportRepository(BaseRepository[Report]):
     model = Report
 
+    def claim_for_generation(self, report_id: int) -> bool:
+        """把报告从 queued 原子地改为 generating，返回是否抢占成功。
+
+        同一个报告可能因为多条用例并发完成而被重复投递生成任务，
+        只有成功把状态从 queued 改走的那一次才允许真正生成，
+        避免重复写盘和重复插入文件台账。
+        """
+        result = self.session.execute(
+            update(Report)
+            .where(Report.id == report_id, Report.status == "queued")
+            .values(status="generating")
+        )
+        return (result.rowcount or 0) == 1
+
 
 class ReportTemplateRepository(BaseRepository[ReportTemplate]):
     model = ReportTemplate
@@ -169,5 +182,3 @@ class AuditLogRepository(BaseRepository[AuditLog]):
     model = AuditLog
 
 
-class IdempotencyKeyRepository(BaseRepository[IdempotencyKey]):
-    model = IdempotencyKey

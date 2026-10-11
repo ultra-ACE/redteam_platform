@@ -2333,7 +2333,7 @@ paths:
   /api/v1/files:
     get:
       tags:
-      - 文件
+      - 文件台账
       summary: List Files
       operationId: listFiles
       security:
@@ -2385,36 +2385,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-    post:
-      tags:
-      - 文件
-      summary: Upload File
-      operationId: uploadFile
-      security:
-      - LocalToken: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_uploadFile'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse_StoredFile_'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/files/{file_id}:
     get:
       tags:
-      - 文件
+      - 文件台账
       summary: Get File
       operationId: getFile
       security:
@@ -2442,7 +2416,7 @@ paths:
   /api/v1/files/{file_id}/download:
     get:
       tags:
-      - 文件
+      - 文件台账
       summary: Download File
       operationId: downloadFile
       security:
@@ -4155,26 +4129,6 @@ components:
       - version
       - file
       title: Body_importBenchmark
-    Body_uploadFile:
-      properties:
-        file:
-          type: string
-          contentMediaType: application/octet-stream
-          title: File
-        owner_type:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Owner Type
-        owner_id:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Owner Id
-      type: object
-      required:
-      - file
-      title: Body_uploadFile
     EvaluationResult:
       properties:
         attempt_id:

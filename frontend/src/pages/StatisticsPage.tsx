@@ -101,7 +101,11 @@ export function StatisticsPage() {
           pagination={false}
           columns={[
             { title: '尝试 ID', dataIndex: 'attempt_id' },
-            { title: '用例 ID', dataIndex: 'external_id' },
+            {
+              title: '来源编号',
+              dataIndex: 'external_id',
+              ellipsis: { showTitle: true },
+            },
             { title: '模型 ID', dataIndex: 'model_id' },
             { title: '风险分', dataIndex: 'overall_score', render: formatScore },
             { title: '风险等级', dataIndex: 'risk_level', render: (value) => <RiskLevelTag level={value} /> },

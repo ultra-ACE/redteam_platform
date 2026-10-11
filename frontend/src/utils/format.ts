@@ -63,3 +63,12 @@ export const verdictColor = (verdict?: string | null) => {
       return 'default';
   }
 };
+
+/**
+ * 来源编号来自数据集自身，个别数据集会把整段文本当成编号，
+ * 展示时统一截断，完整值通过 title 提示给出。
+ */
+export const shortenId = (value?: string | null, max = 24) => {
+  if (!value) return '-';
+  return value.length <= max ? value : `${value.slice(0, max)}…`;
+};

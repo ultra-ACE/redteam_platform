@@ -250,7 +250,12 @@ export function TaskDetailPage() {
           })}
           columns={[
             { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
-            { title: '用例 ID', dataIndex: 'external_id' },
+            {
+              title: '来源编号',
+              dataIndex: 'external_id',
+              width: 200,
+              ellipsis: { showTitle: true },
+            },
             {
               title: '测试 Prompt',
               dataIndex: 'prompt_excerpt',

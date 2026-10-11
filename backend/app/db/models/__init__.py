@@ -4,7 +4,6 @@ from app.db.models.judge import JudgeProfile, JudgeResult, RuleDefinition, RuleS
 from app.db.models.model import ModelRegistry
 from app.db.models.reporting import (
     AuditLog,
-    IdempotencyKey,
     Report,
     ReportTemplate,
     ReportTemplateVersion,
@@ -48,5 +47,4 @@ __all__ = [
     "StoredFile",
     "SystemConfig",
     "AuditLog",
-    "IdempotencyKey",
 ]

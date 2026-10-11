@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getTaskAttemptDetail } from '../api';
 import type { RuleValidationDetail } from '../types/api';
 import { JudgeVerdictTag, RiskLevelTag } from './ui';
-import { formatDateTime, formatPercent, formatScore, riskColor } from '../utils/format';
+import { formatDateTime, formatPercent, formatScore, riskColor, shortenId } from '../utils/format';
 
 const { Text } = Typography;
 
@@ -56,7 +56,10 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
           ) : null}
 
           <Descriptions column={2} size="small" bordered>
-            <Descriptions.Item label="用例 ID">{detail.external_id ?? detail.test_case_id ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="用例编号">{detail.test_case_id ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="来源编号">
+              <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
+            </Descriptions.Item>
             <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="被测模型">{detail.model_name ?? `模型 #${detail.model_id}`}</Descriptions.Item>
             <Descriptions.Item label="攻击模板">

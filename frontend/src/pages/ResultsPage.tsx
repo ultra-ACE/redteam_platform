@@ -46,7 +46,7 @@ export function ResultsPage() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="按用例 ID / 尝试 ID / 提示词筛选"
+              placeholder="按来源编号 / 尝试 ID / 提示词筛选"
               style={{ width: 280 }}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -67,7 +67,12 @@ export function ResultsPage() {
           })}
           columns={[
             { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
-            { title: '用例 ID', dataIndex: 'external_id' },
+            {
+              title: '来源编号',
+              dataIndex: 'external_id',
+              width: 200,
+              ellipsis: { showTitle: true },
+            },
             {
               title: '测试 Prompt',
               dataIndex: 'prompt_excerpt',

@@ -9,7 +9,6 @@ from app.repositories import (
     BenchmarkVersionRepository,
     EvaluationTaskRepository,
     FileRepository,
-    IdempotencyKeyRepository,
     JudgeProfileRepository,
     JudgeResultRepository,
     ManualReviewRepository,
@@ -70,7 +69,6 @@ class UnitOfWork:
         self.files = FileRepository(session)
         self.system_configs = SystemConfigRepository(session)
         self.audit_logs = AuditLogRepository(session)
-        self.idempotency_keys = IdempotencyKeyRepository(session)
 
     def commit(self) -> None:
         self.session.commit()

@@ -139,7 +139,7 @@ export function BenchmarksPage() {
 
   const selectedBenchmarkName = useMemo(() => selectedBenchmark?.name ?? '未选择 Benchmark', [selectedBenchmark]);
 
-  /** 用例表格的本地筛选：支持按外部 ID、提示词正文、原始标签和数字 ID 查找。 */
+  /** 用例表格的本地筛选：支持按来源编号、提示词正文、原始标签和数字 ID 查找。 */
   const filteredTestCases = useMemo(() => {
     const normalized = testCaseKeyword.trim().toLowerCase();
     if (!normalized) return testCases;
@@ -334,7 +334,7 @@ export function BenchmarksPage() {
               <Input
                 allowClear
                 prefix={<SearchOutlined />}
-                placeholder="按外部 ID / 提示词 / 标签搜索"
+              placeholder="按来源编号 / 提示词 / 标签搜索"
                 style={{ width: 280 }}
                 value={testCaseKeyword}
                 onChange={(event) => setTestCaseKeyword(event.target.value)}
@@ -352,7 +352,12 @@ export function BenchmarksPage() {
             pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }}
             columns={[
               { title: 'ID', dataIndex: 'test_case_id', width: 80 },
-              { title: '外部 ID', dataIndex: 'external_id', width: 140 },
+              {
+                title: '来源编号',
+                dataIndex: 'external_id',
+                width: 200,
+                ellipsis: { showTitle: true },
+              },
               { title: 'Prompt', dataIndex: 'prompt', ellipsis: { showTitle: true } },
               { title: '原始标签', dataIndex: 'source_label', width: 140 },
               {

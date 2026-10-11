@@ -63,6 +63,17 @@ class ReportService(BaseService):
         if report is None:
             return None
 
+        if report.status != "queued":
+            # 已生成完成、正在生成或已失败：重复任务直接跳过，避免重复写盘与台账
+            return report
+
+        # 原子领取：并发或重复投递时只有一次能把 queued 改走，其余直接返回
+        if not self.uow.reports.claim_for_generation(report_id):
+            self.uow.session.rollback()
+            return self.uow.reports.get(report_id)
+        self.uow.commit()
+        report = self.uow.reports.get(report_id)
+
         task = self.uow.evaluation_tasks.get(report.task_id)
         if task is None:
             report.status = "failed"
@@ -71,10 +82,6 @@ class ReportService(BaseService):
             self.uow.session.flush()
             self.uow.commit()
             return report
-
-        report.status = "generating"
-        self.uow.session.flush()
-        self.uow.commit()
 
         try:
             statistics = StatisticsService(self.uow).get_task_statistics(report.task_id, persist=True)
@@ -519,17 +526,30 @@ class ReportTemplateService(BaseService):
 
 class ReportAutomationService(BaseService):
     def trigger_if_task_complete(self, task_id: int, report_format: str | None = None) -> Report | None:
+        report, _ = self.ensure_auto_report(task_id, report_format)
+        return report
+
+    def ensure_auto_report(
+        self,
+        task_id: int,
+        report_format: str | None = None,
+    ) -> tuple[Report | None, bool]:
+        """任务全部结束时确保存在一份自动报告。
+
+        返回 ``(报告, 本次是否新建)``。只有新建的那一次才需要投递生成任务，
+        否则每条用例完成时都会重复投递，导致同一份报告被生成几十次。
+        """
         task = self.uow.evaluation_tasks.get(task_id)
         if task is None:
-            return None
+            return None, False
 
         task_cases = self.uow.task_cases.list(page=1, page_size=100000, task_id=task_id)
         if not task_cases:
-            return None
+            return None, False
 
         terminal = {"succeeded", "failed", "cancelled", "skipped"}
         if any(task_case.status not in terminal for task_case in task_cases):
-            return None
+            return None, False
 
         existing = self.uow.reports.list(
             page=1,
@@ -538,7 +558,7 @@ class ReportAutomationService(BaseService):
             report_type="auto",
         )
         if existing:
-            return existing[0]
+            return existing[0], False
 
         task_config = task.config or {}
         chosen_format = report_format or task_config.get("auto_report_format") or "pdf"
@@ -550,4 +570,4 @@ class ReportAutomationService(BaseService):
             filter_snapshot={},
             report_version="v1",
         )
-        return self.uow.reports.add(report)
+        return self.uow.reports.add(report), True

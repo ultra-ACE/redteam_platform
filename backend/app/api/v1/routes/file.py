@@ -1,15 +1,21 @@
+"""文件台账接口。
+
+这里的文件都由系统内部产生：Benchmark 导入时存档数据集原文，报告生成时写入产物。
+用户侧唯一的上传入口是 ``POST /benchmarks/import``，因此本模块只提供查询与下载，
+不再暴露通用的文件上传入口，避免出现两套上传通道。
+"""
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.api.deps import get_uow
-from app.db.models import StoredFile as StoredFileModel
 from app.api.utils import ok, require_local_token
+from app.db.models import StoredFile as StoredFileModel
 from app.schemas import ApiResponse, PaginatedData, StoredFile
-from app.services import FileStorageService, UnitOfWork
+from app.services import UnitOfWork
 
-router = APIRouter(tags=["文件"])
+router = APIRouter(tags=["文件台账"])
 
 
 @router.get(
@@ -34,32 +40,6 @@ async def list_files(
     )
     total = uow.files.count(owner_type=owner_type, owner_id=owner_id)
     return ok(PaginatedData[StoredFile](items=items, page=page, page_size=page_size, total=total).model_dump())
-
-
-@router.post(
-    "/files",
-    response_model=ApiResponse[StoredFile],
-    operation_id="uploadFile",
-)
-async def upload_file(
-    file: UploadFile = File(...),
-    owner_type: str | None = Form(default=None),
-    owner_id: int | None = Form(default=None),
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    content = await file.read()
-    try:
-        stored = FileStorageService(uow).save_bytes(
-            content=content,
-            original_name=file.filename or "upload.bin",
-            mime_type=file.content_type,
-            owner_type=owner_type,
-            owner_id=owner_id,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=413 if "exceeds limit" in str(exc) else 422, detail=str(exc)) from exc
-    return ok(StoredFile.model_validate(stored).model_dump())
 
 
 @router.get(

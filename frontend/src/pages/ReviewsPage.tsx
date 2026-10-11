@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createManualReview, getManualReview, listManualReviews, listRiskCategories, listRiskTaxonomies } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { ManualReview, ManualReviewDetail, RiskCategory } from '../types/api';
-import { formatDateTime, formatPercent, formatScore } from '../utils/format';
+import { formatDateTime, formatPercent, formatScore, shortenId } from '../utils/format';
 
 function flattenCategories(nodes: RiskCategory[], prefix = ''): Array<{ label: string; value: number }> {
   const options: Array<{ label: string; value: number }> = [];
@@ -173,7 +173,10 @@ export function ReviewsPage() {
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="尝试 ID">{detail.task_attempt_id}</Descriptions.Item>
-              <Descriptions.Item label="用例 ID">{detail.external_id ?? detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="用例编号">{detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="来源编号">
+                <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
+              </Descriptions.Item>
               <Descriptions.Item label="Judge 判断">
                 {detail.judge_verdict ?? '-'} / 置信度 {formatPercent(detail.judge_confidence)} / 可信度 {formatPercent(detail.judge_trust_score)}
               </Descriptions.Item>
