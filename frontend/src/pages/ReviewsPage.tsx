@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { CheckCircleOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createManualReview, getManualReview, listManualReviews, listRiskCategories, listRiskTaxonomies } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { ManualReview, ManualReviewDetail, RiskCategory } from '../types/api';
-import { formatDateTime, formatPercent, formatScore } from '../utils/format';
+import { formatDateTime, formatPercent, formatScore, shortenId } from '../utils/format';
 
 function flattenCategories(nodes: RiskCategory[], prefix = ''): Array<{ label: string; value: number }> {
   const options: Array<{ label: string; value: number }> = [];
@@ -20,6 +20,7 @@ export function ReviewsPage() {
   const queryClient = useQueryClient();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<ManualReviewDetail | null>(null);
+  const [keyword, setKeyword] = useState('');
   const [form] = Form.useForm();
 
   const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 200 }) });
@@ -68,8 +69,20 @@ export function ReviewsPage() {
   });
 
   const reviews = reviewsQuery.data?.items ?? [];
-  const pendingReviews = reviews.filter((item) => item.status === 'pending' || item.status === 'in_review');
-  const historyReviews = reviews.filter((item) => item.status === 'resolved' || item.status === 'rejected');
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const matchedReviews = normalizedKeyword
+    ? reviews.filter((item) =>
+        [
+          String(item.review_id),
+          String(item.task_attempt_id),
+          item.trigger_reason,
+          item.status,
+          item.reviewer,
+        ].some((value) => (value ?? '').toLowerCase().includes(normalizedKeyword)),
+      )
+    : reviews;
+  const pendingReviews = matchedReviews.filter((item) => item.status === 'pending' || item.status === 'in_review');
+  const historyReviews = matchedReviews.filter((item) => item.status === 'resolved' || item.status === 'rejected');
   const categoryOptions = categoriesQuery.data ?? [];
 
   const renderTable = (data: ManualReview[], showDecision = false) => (
@@ -109,7 +122,21 @@ export function ReviewsPage() {
       <PageHeader
         title="人工复核"
         description="处理低可信度、规则冲突、边界分数和多 Judge 分歧结果，并修正风险类别与风险分。"
-        extra={<Button icon={<ReloadOutlined />} onClick={() => reviewsQuery.refetch()}>刷新</Button>}
+        extra={
+          <Space>
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="按复核 ID / 尝试 ID / 触发原因搜索"
+              style={{ width: 320 }}
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => reviewsQuery.refetch()}>
+              刷新
+            </Button>
+          </Space>
+        }
       />
 
       <Tabs
@@ -146,7 +173,10 @@ export function ReviewsPage() {
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="尝试 ID">{detail.task_attempt_id}</Descriptions.Item>
-              <Descriptions.Item label="用例 ID">{detail.external_id ?? detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="用例编号">{detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="来源编号">
+                <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
+              </Descriptions.Item>
               <Descriptions.Item label="Judge 判断">
                 {detail.judge_verdict ?? '-'} / 置信度 {formatPercent(detail.judge_confidence)} / 可信度 {formatPercent(detail.judge_trust_score)}
               </Descriptions.Item>

@@ -5,8 +5,10 @@ import type {
   AttackTemplate,
   AttackTemplatePreviewResult,
   AttackTemplateValidationResult,
+  AttemptDetail,
   AuditLog,
   Benchmark,
+  BenchmarkAdapter,
   BenchmarkImportResult,
   BenchmarkVersion,
   EvaluationResult,
@@ -48,9 +50,18 @@ export const createModel = async (payload: Record<string, unknown>) => {
   return data.data;
 };
 
+export type ModelHealthResult = {
+  model_id: number;
+  status: string;
+  latency_ms?: number;
+  error_message?: string | null;
+};
+
 export const checkModelHealth = async (modelId: number) => {
-  const { data } = await apiClient.post<ApiEnvelope<{ model_id: number; status: string; latency_ms?: number }>>(
+  const { data } = await apiClient.post<ApiEnvelope<ModelHealthResult>>(
     `/models/${modelId}/health-check`,
+    undefined,
+    { timeout: 30000 },
   );
   return data.data;
 };
@@ -60,6 +71,28 @@ export const importBenchmark = async (payload: FormData) => {
   const { data } = await apiClient.post<ApiEnvelope<BenchmarkImportResult>>('/benchmarks/import', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+  return data.data;
+};
+
+export const listBenchmarkAdapters = async () => {
+  const { data } = await apiClient.get<ApiEnvelope<BenchmarkAdapter[]>>('/benchmarks/adapters');
+  return data.data;
+};
+
+export type DeleteSummary = {
+  deleted_versions: number;
+  deleted_test_cases: number;
+  deleted_labels: number;
+  deleted_mappings: number;
+};
+
+export const deleteBenchmark = async (benchmarkId: number) => {
+  const { data } = await apiClient.delete<ApiEnvelope<DeleteSummary>>(`/benchmarks/${benchmarkId}`);
+  return data.data;
+};
+
+export const deleteBenchmarkVersion = async (versionId: number) => {
+  const { data } = await apiClient.delete<ApiEnvelope<DeleteSummary>>(`/benchmark-versions/${versionId}`);
   return data.data;
 };
 
@@ -110,6 +143,11 @@ export const getTaskResults = async (taskId: number, params?: Record<string, unk
 
 export const getTaskStatistics = async (taskId: number) => {
   const { data } = await apiClient.get<ApiEnvelope<Statistics>>(`/evaluation-tasks/${taskId}/statistics`);
+  return data.data;
+};
+
+export const getTaskAttemptDetail = async (attemptId: number) => {
+  const { data } = await apiClient.get<ApiEnvelope<AttemptDetail>>(`/task-attempts/${attemptId}`);
   return data.data;
 };
 
@@ -278,6 +316,20 @@ export const listJudgeProfiles = async (params?: Record<string, unknown>) => {
   return data.data;
 };
 
+export type RuleJudgeDefaults = {
+  harmful_keywords: string[];
+  refusal_keywords: string[];
+  harmful_patterns: string[];
+  unsafe_confidence: number;
+  safe_confidence: number;
+  uncertain_confidence: number;
+};
+
+export const getRuleJudgeDefaults = async () => {
+  const { data } = await apiClient.get<ApiEnvelope<RuleJudgeDefaults>>('/judge-profiles/rule-defaults');
+  return data.data;
+};
+
 export const createJudgeProfile = async (payload: Record<string, unknown>) => {
   const { data } = await apiClient.post<ApiEnvelope<JudgeProfile>>('/judge-profiles', payload);
   return data.data;
@@ -371,13 +423,6 @@ export const createRiskTaxonomy = async (payload: Record<string, unknown>) => {
 
 export const listFiles = async (params?: Record<string, unknown>) => {
   const { data } = await apiClient.get<ApiEnvelope<PaginatedData<StoredFile>>>('/files', { params });
-  return data.data;
-};
-
-export const uploadFile = async (payload: FormData) => {
-  const { data } = await apiClient.post<ApiEnvelope<StoredFile>>('/files', payload, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
   return data.data;
 };
 

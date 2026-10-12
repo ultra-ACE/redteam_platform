@@ -109,17 +109,3 @@ class AuditLog(BaseModel):
     after_data: Mapped[dict | None] = mapped_column(JSONType)
     request_id: Mapped[str | None] = mapped_column(String(128))
     ip: Mapped[str | None] = mapped_column(String(64))
-
-
-class IdempotencyKey(BaseModel):
-    __tablename__ = "idempotency_keys"
-    __table_args__ = (
-        UniqueConstraint("key", name="uq_idempotency_keys_key"),
-        Index("ix_idempotency_keys_expires_at", "expires_at"),
-    )
-
-    key: Mapped[str] = mapped_column(String(255), nullable=False)
-    request_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    response_body: Mapped[dict | None] = mapped_column(JSONType)
-    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

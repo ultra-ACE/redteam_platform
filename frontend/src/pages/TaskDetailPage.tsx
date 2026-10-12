@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeftOutlined, FileTextOutlined, RedoOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Col, Descriptions, Flex, Progress, Row, Space, Spin, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { getTaskEventsUrl, getTaskResults, getTaskStatistics, getTaskStatus, retryFailedTask } from '../api';
 import type { TaskStatusData } from '../types/api';
+import { AttemptDetailDrawer } from '../components/AttemptDetailDrawer';
 import { JudgeVerdictTag, PageHeader, RiskLevelTag, TaskStatusTag } from '../components/ui';
 import { formatDateTime, formatPercent, formatScore, riskColor } from '../utils/format';
 
@@ -14,10 +15,35 @@ const TERMINAL_TASK_STATUSES = new Set(['succeeded', 'partially_failed', 'failed
 export function TaskDetailPage() {
   const { taskId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [liveConnected, setLiveConnected] = useState(false);
   const [streamVersion, setStreamVersion] = useState(0);
+  const [detailAttemptId, setDetailAttemptId] = useState<number | null>(() => {
+    const raw = Number(searchParams.get('attempt'));
+    return Number.isFinite(raw) && raw > 0 ? raw : null;
+  });
   const id = Number(taskId);
+
+  /** 支持报告里的 /tasks/{id}?attempt={attemptId} 深链，直接展开对应尝试详情。 */
+  useEffect(() => {
+    const raw = Number(searchParams.get('attempt'));
+    setDetailAttemptId(Number.isFinite(raw) && raw > 0 ? raw : null);
+  }, [searchParams]);
+
+  const openAttemptDetail = (attemptId: number) => {
+    setDetailAttemptId(attemptId);
+    const next = new URLSearchParams(searchParams);
+    next.set('attempt', String(attemptId));
+    setSearchParams(next, { replace: true });
+  };
+
+  const closeAttemptDetail = () => {
+    setDetailAttemptId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete('attempt');
+    setSearchParams(next, { replace: true });
+  };
 
   const statusQuery = useQuery({ queryKey: ['task-status', id], queryFn: () => getTaskStatus(id), enabled: Boolean(id) });
   const resultsQuery = useQuery({ queryKey: ['task-results', id], queryFn: () => getTaskResults(id, { page_size: 100 }), enabled: Boolean(id) });
@@ -203,15 +229,39 @@ export function TaskDetailPage() {
         </Col>
       </Row>
 
-      <Card className="section-card" title="逐条评测结果" extra={<Tag color="blue">最多展示 100 条</Tag>}>
+      <Card
+        className="section-card"
+        title="逐条评测结果"
+        extra={
+          <Space>
+            <Tag color="blue">最多展示 100 条</Tag>
+            <Tag color="purple">点击任意行查看完整证据链</Tag>
+          </Space>
+        }
+      >
         <Table
           rowKey="attempt_id"
           loading={resultsQuery.isLoading}
           dataSource={resultsQuery.data?.items ?? []}
           pagination={{ pageSize: 10 }}
+          onRow={(record) => ({
+            onClick: () => openAttemptDetail(record.attempt_id),
+            style: { cursor: 'pointer' },
+          })}
           columns={[
             { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
-            { title: '用例 ID', dataIndex: 'external_id' },
+            {
+              title: '来源编号',
+              dataIndex: 'external_id',
+              width: 200,
+              ellipsis: { showTitle: true },
+            },
+            {
+              title: '测试 Prompt',
+              dataIndex: 'prompt_excerpt',
+              ellipsis: { showTitle: true },
+              render: (value: string | null | undefined) => value || '-',
+            },
             { title: '模型 ID', dataIndex: 'model_id', width: 90 },
             {
               title: 'Judge',
@@ -237,6 +287,8 @@ export function TaskDetailPage() {
           ]}
         />
       </Card>
+
+      <AttemptDetailDrawer attemptId={detailAttemptId} onClose={closeAttemptDetail} />
     </div>
   );
 }

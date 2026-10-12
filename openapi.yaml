@@ -12,6 +12,7 @@ paths:
       tags:
       - 系统
       summary: Get Health
+      description: 真实探测数据库和 Redis，避免依赖服务掉线却仍显示健康。
       operationId: getHealth
       responses:
         '200':
@@ -157,6 +158,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - LocalToken: []
+  /api/v1/benchmarks/adapters:
+    get:
+      tags:
+      - Benchmark
+      summary: List Benchmark Adapters
+      description: 列出内置的异构数据集适配器，导入时可据此手动指定 source_type。
+      operationId: listBenchmarkAdapters
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_list_dict_str__Any___'
       security:
       - LocalToken: []
   /api/v1/benchmarks:
@@ -350,6 +367,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse_TestCase_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/benchmark-versions/{benchmark_version_id}:
+    delete:
+      tags:
+      - Benchmark
+      summary: Delete Benchmark Version
+      operationId: deleteBenchmarkVersion
+      security:
+      - LocalToken: []
+      parameters:
+      - name: benchmark_version_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Benchmark Version Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__int__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/benchmarks/{benchmark_id}:
+    delete:
+      tags:
+      - Benchmark
+      summary: Delete Benchmark
+      operationId: deleteBenchmark
+      security:
+      - LocalToken: []
+      parameters:
+      - name: benchmark_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Benchmark Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__int__'
         '422':
           description: Validation Error
           content:
@@ -1397,6 +1470,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/task-attempts/{attempt_id}:
+    get:
+      tags:
+      - 评测任务
+      summary: Get Task Attempt Detail
+      description: 返回单次尝试的完整证据链：提示词、模型输出、Judge 详情、规则命中、六维风险与复核状态。
+      operationId: getTaskAttemptDetail
+      security:
+      - LocalToken: []
+      parameters:
+      - name: attempt_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Attempt Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_AttemptDetail_'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/evaluation-tasks/{task_id}/actions/start:
     post:
       tags:
@@ -1533,6 +1635,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/judge-profiles/rule-defaults:
+    get:
+      tags:
+      - Judge
+      summary: Get Rule Judge Defaults
+      description: 返回规则 Judge 的内置默认关键词，供前端「填入默认关键词」使用。
+      operationId: getRuleJudgeDefaults
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__Any__'
+      security:
+      - LocalToken: []
   /api/v1/judge-profiles:
     get:
       tags:
@@ -2215,7 +2333,7 @@ paths:
   /api/v1/files:
     get:
       tags:
-      - 文件
+      - 文件台账
       summary: List Files
       operationId: listFiles
       security:
@@ -2267,36 +2385,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-    post:
-      tags:
-      - 文件
-      summary: Upload File
-      operationId: uploadFile
-      security:
-      - LocalToken: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Body_uploadFile'
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse_StoredFile_'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/files/{file_id}:
     get:
       tags:
-      - 文件
+      - 文件台账
       summary: Get File
       operationId: getFile
       security:
@@ -2324,7 +2416,7 @@ paths:
   /api/v1/files/{file_id}/download:
     get:
       tags:
-      - 文件
+      - 文件台账
       summary: Download File
       operationId: downloadFile
       security:
@@ -2438,6 +2530,28 @@ components:
           - req_01J8Z6K9YQ6M2H
       type: object
       title: ApiResponse[AttackTemplate]
+    ApiResponse_AttemptDetail_:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - $ref: '#/components/schemas/AttemptDetail'
+          - type: 'null'
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[AttemptDetail]
     ApiResponse_EvaluationTask_:
       properties:
         code:
@@ -3320,6 +3434,31 @@ components:
           - req_01J8Z6K9YQ6M2H
       type: object
       title: ApiResponse[dict[str, Any]]
+    ApiResponse_dict_str__int__:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - additionalProperties:
+              type: integer
+            type: object
+          - type: 'null'
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[dict[str, int]]
     ApiResponse_list_AttackTemplate__:
       properties:
         code:
@@ -3370,6 +3509,32 @@ components:
           - req_01J8Z6K9YQ6M2H
       type: object
       title: ApiResponse[list[RiskCategory]]
+    ApiResponse_list_dict_str__Any___:
+      properties:
+        code:
+          type: string
+          title: Code
+          default: OK
+        message:
+          type: string
+          title: Message
+          default: success
+        data:
+          anyOf:
+          - items:
+              additionalProperties: true
+              type: object
+            type: array
+          - type: 'null'
+          title: Data
+        request_id:
+          type: string
+          title: Request Id
+          default: req_placeholder
+          examples:
+          - req_01J8Z6K9YQ6M2H
+      type: object
+      title: ApiResponse[list[dict[str, Any]]]
     AttackMethod:
       properties:
         attack_method_id:
@@ -3650,6 +3815,146 @@ components:
       required:
       - version
       title: AttackTemplateVersionCreateRequest
+    AttemptDetail:
+      properties:
+        attempt_id:
+          type: integer
+          title: Attempt Id
+        task_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Id
+        task_case_id:
+          type: integer
+          title: Task Case Id
+        test_case_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Test Case Id
+        external_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External Id
+        model_id:
+          type: integer
+          title: Model Id
+        model_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Name
+        attack_template_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Attack Template Id
+        attack_template_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attack Template Name
+        attempt_no:
+          type: integer
+          title: Attempt No
+          default: 1
+        status:
+          $ref: '#/components/schemas/AttemptStatus'
+        prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt
+        system_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: System Prompt
+        rendered_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rendered Prompt
+        input_snapshot:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Input Snapshot
+        model_output:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model Output
+        latency_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Latency Ms
+        prompt_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Prompt Tokens
+        completion_tokens:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Completion Tokens
+        error_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Code
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Started At
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Finished At
+        normalized_risk_categories:
+          items:
+            $ref: '#/components/schemas/RiskCategoryRef'
+          type: array
+          title: Normalized Risk Categories
+        judge:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeDetail'
+          - type: 'null'
+        rule_validations:
+          items:
+            $ref: '#/components/schemas/RuleValidationDetail'
+          type: array
+          title: Rule Validations
+        risk:
+          anyOf:
+          - $ref: '#/components/schemas/RiskAssessment'
+          - type: 'null'
+        manual_review:
+          anyOf:
+          - $ref: '#/components/schemas/ManualReview'
+          - type: 'null'
+      type: object
+      required:
+      - attempt_id
+      - task_case_id
+      - model_id
+      - status
+      title: AttemptDetail
+      description: 单次尝试的完整证据链：提示词 → 模型输出 → Judge → 规则 → 风险 → 复核。
     AttemptStatus:
       type: string
       enum:
@@ -3808,32 +4113,22 @@ components:
           - type: integer
           - type: 'null'
           title: Risk Taxonomy Id
+        source_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Type
+        default_risk_category_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Default Risk Category Code
       type: object
       required:
       - name
       - version
       - file
       title: Body_importBenchmark
-    Body_uploadFile:
-      properties:
-        file:
-          type: string
-          contentMediaType: application/octet-stream
-          title: File
-        owner_type:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Owner Type
-        owner_id:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Owner Id
-      type: object
-      required:
-      - file
-      title: Body_uploadFile
     EvaluationResult:
       properties:
         attempt_id:
@@ -3864,6 +4159,11 @@ components:
           title: Attack Template Id
         status:
           $ref: '#/components/schemas/AttemptStatus'
+        prompt_excerpt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Prompt Excerpt
         model_output_excerpt:
           anyOf:
           - type: string
@@ -4087,6 +4387,69 @@ components:
           default: 1.0.0
       type: object
       title: HealthData
+    JudgeDetail:
+      properties:
+        judge_result_id:
+          type: integer
+          title: Judge Result Id
+        judge_profile_id:
+          type: integer
+          title: Judge Profile Id
+        judge_profile_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Judge Profile Name
+        judge_type:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeType'
+          - type: 'null'
+        strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Strategy
+        verdict:
+          anyOf:
+          - $ref: '#/components/schemas/JudgeVerdict'
+          - type: 'null'
+        risk_category:
+          anyOf:
+          - $ref: '#/components/schemas/RiskCategoryRef'
+          - type: 'null'
+        confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confidence
+        trust_score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Trust Score
+        trust_breakdown:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Trust Breakdown
+        reasoning:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reasoning
+        evidence:
+          title: Evidence
+        raw_output:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Raw Output
+      type: object
+      required:
+      - judge_result_id
+      - judge_profile_id
+      title: JudgeDetail
     JudgeProfile:
       properties:
         judge_profile_id:
@@ -5741,6 +6104,34 @@ components:
       - name
       - version
       title: RiskTaxonomyCreateRequest
+    RuleValidationDetail:
+      properties:
+        rule_definition_id:
+          type: integer
+          title: Rule Definition Id
+        rule_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Code
+        passed:
+          type: boolean
+          title: Passed
+          default: true
+        severity:
+          anyOf:
+          - $ref: '#/components/schemas/RiskLevel'
+          - type: 'null'
+        hit_count:
+          type: integer
+          title: Hit Count
+          default: 0
+        matched_evidence:
+          title: Matched Evidence
+      type: object
+      required:
+      - rule_definition_id
+      title: RuleValidationDetail
     RuleValidationSummary:
       properties:
         hit_count:

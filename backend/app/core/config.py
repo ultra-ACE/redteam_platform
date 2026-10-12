@@ -50,6 +50,10 @@ class Settings:
     max_upload_bytes: int = field(
         default_factory=lambda: int(os.getenv("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
     )
+    # 报告里的"尝试 ID"会生成指向前端详情页的绝对链接，供本地打开报告后直接跳转。
+    frontend_base_url: str = field(
+        default_factory=lambda: os.getenv("FRONTEND_BASE_URL", "http://127.0.0.1:5173").rstrip("/")
+    )
 
 
 settings = Settings()

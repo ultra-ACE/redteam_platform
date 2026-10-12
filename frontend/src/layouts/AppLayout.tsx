@@ -69,7 +69,7 @@ const menuItems = [
     children: [
       { key: '/system', icon: <SettingOutlined />, label: '系统配置' },
       { key: '/audit', icon: <AuditOutlined />, label: '审计日志' },
-      { key: '/files', icon: <FolderOpenOutlined />, label: '文件管理' },
+        { key: '/files', icon: <FolderOpenOutlined />, label: '文件台账' },
     ],
   },
 ];
@@ -89,7 +89,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/report-templates': { title: '报告模板', subtitle: '管理报告模板和版本发布' },
   '/system': { title: '系统配置', subtitle: '管理超时、并发、文件限制和评分参数' },
   '/audit': { title: '审计日志', subtitle: '查看系统关键操作和资源变更记录' },
-  '/files': { title: '文件管理', subtitle: '本地上传、索引和下载数据集、响应与报告文件' },
+  '/files': { title: '文件台账', subtitle: '查看并下载数据集原文与报告产物' },
 };
 
 export function AppLayout() {

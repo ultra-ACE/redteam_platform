@@ -13,6 +13,7 @@ from app.schemas import (
     TestCaseUpdateRequest,
 )
 from app.services import BenchmarkImportService, BenchmarkService, UnitOfWork
+from app.services.dataset_adapters import list_adapters
 
 router = APIRouter()
 
@@ -28,22 +29,46 @@ async def import_benchmark(
     version: str = Form(...),
     file: UploadFile = File(...),
     risk_taxonomy_id: int | None = Form(default=None),
+    source_type: str | None = Form(default=None),
+    default_risk_category_code: str | None = Form(default=None),
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
+    safe_name = (name or "").strip()
+    if not safe_name or safe_name.lower() == "undefined":
+        raise HTTPException(status_code=422, detail="benchmark name is required")
+    safe_version = (version or "").strip()
+    if not safe_version or safe_version.lower() == "undefined":
+        raise HTTPException(status_code=422, detail="benchmark version is required")
+
     content = await file.read()
     try:
         result = BenchmarkImportService(uow).import_benchmark(
-            name=name,
-            version=version,
+            name=safe_name,
+            version=safe_version,
             content=content,
             file_name=file.filename or "dataset.jsonl",
             mime_type=file.content_type,
             risk_taxonomy_id=risk_taxonomy_id,
+            source_type=(source_type or "").strip() or None,
+            default_risk_category_code=(default_risk_category_code or "").strip() or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return ok(result.model_dump())
+
+
+@router.get(
+    "/benchmarks/adapters",
+    response_model=ApiResponse[list[dict[str, Any]]],
+    operation_id="listBenchmarkAdapters",
+    tags=["Benchmark"],
+)
+async def list_benchmark_adapters(
+    _: None = Depends(require_local_token),
+) -> dict:
+    """列出内置的异构数据集适配器，导入时可据此手动指定 source_type。"""
+    return ok(list_adapters())
 
 
 @router.get(
@@ -128,3 +153,43 @@ async def update_test_case(
     if test_case is None:
         raise HTTPException(status_code=404, detail="test case not found")
     return ok(TestCase.model_validate(test_case).model_dump())
+
+
+@router.delete(
+    "/benchmark-versions/{benchmark_version_id}",
+    response_model=ApiResponse[dict[str, int]],
+    operation_id="deleteBenchmarkVersion",
+    tags=["Benchmark"],
+)
+async def delete_benchmark_version(
+    benchmark_version_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    try:
+        summary = BenchmarkService(uow).delete_version(benchmark_version_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if summary is None:
+        raise HTTPException(status_code=404, detail="benchmark version not found")
+    return ok(summary)
+
+
+@router.delete(
+    "/benchmarks/{benchmark_id}",
+    response_model=ApiResponse[dict[str, int]],
+    operation_id="deleteBenchmark",
+    tags=["Benchmark"],
+)
+async def delete_benchmark(
+    benchmark_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    try:
+        summary = BenchmarkService(uow).delete_benchmark(benchmark_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if summary is None:
+        raise HTTPException(status_code=404, detail="benchmark not found")
+    return ok(summary)

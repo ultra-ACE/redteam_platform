@@ -9,7 +9,6 @@ from app.repositories import (
     BenchmarkVersionRepository,
     EvaluationTaskRepository,
     FileRepository,
-    IdempotencyKeyRepository,
     JudgeProfileRepository,
     JudgeResultRepository,
     ManualReviewRepository,
@@ -20,6 +19,7 @@ from app.repositories import (
     RiskAssessmentRepository,
     RiskCategoryRepository,
     RiskDimensionScoreRepository,
+    RiskLabelAliasRepository,
     RiskTaxonomyRepository,
     RuleDefinitionRepository,
     RuleSetRepository,
@@ -45,6 +45,7 @@ class UnitOfWork:
         self.risk_taxonomies = RiskTaxonomyRepository(session)
         self.risk_categories = RiskCategoryRepository(session)
         self.benchmark_risk_mappings = BenchmarkRiskMappingRepository(session)
+        self.risk_label_aliases = RiskLabelAliasRepository(session)
         self.models = ModelRepository(session)
         self.attack_methods = AttackMethodRepository(session)
         self.attack_templates = AttackTemplateRepository(session)
@@ -68,7 +69,6 @@ class UnitOfWork:
         self.files = FileRepository(session)
         self.system_configs = SystemConfigRepository(session)
         self.audit_logs = AuditLogRepository(session)
-        self.idempotency_keys = IdempotencyKeyRepository(session)
 
     def commit(self) -> None:
         self.session.commit()

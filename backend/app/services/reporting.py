@@ -16,7 +16,21 @@ from app.services.results import EvaluationResultService
 from app.services.statistics import StatisticsService
 
 
+class RawHtml(str):
+    """已由本模块拼装并转义的 HTML 片段，_html_table 不再二次转义。"""
+
+
 class ReportService(BaseService):
+    @staticmethod
+    def _attempt_url(task_id: Any, attempt_id: Any) -> str:
+        """生成指向前端「任务详情 + 自动展开尝试抽屉」的绝对链接。"""
+        base = settings.frontend_base_url.rstrip("/")
+        return f"{base}/tasks/{task_id}?attempt={attempt_id}"
+
+    def _attempt_link_html(self, task_id: Any, attempt_id: Any) -> str:
+        url = html.escape(self._attempt_url(task_id, attempt_id), quote=True)
+        return f'<a href="{url}">{html.escape(str(attempt_id))}</a>'
+
     def create_report(self, payload: Any) -> Report:
         report = Report(
             task_id=payload.task_id,
@@ -49,6 +63,17 @@ class ReportService(BaseService):
         if report is None:
             return None
 
+        if report.status != "queued":
+            # 已生成完成、正在生成或已失败：重复任务直接跳过，避免重复写盘与台账
+            return report
+
+        # 原子领取：并发或重复投递时只有一次能把 queued 改走，其余直接返回
+        if not self.uow.reports.claim_for_generation(report_id):
+            self.uow.session.rollback()
+            return self.uow.reports.get(report_id)
+        self.uow.commit()
+        report = self.uow.reports.get(report_id)
+
         task = self.uow.evaluation_tasks.get(report.task_id)
         if task is None:
             report.status = "failed"
@@ -57,10 +82,6 @@ class ReportService(BaseService):
             self.uow.session.flush()
             self.uow.commit()
             return report
-
-        report.status = "generating"
-        self.uow.session.flush()
-        self.uow.commit()
 
         try:
             statistics = StatisticsService(self.uow).get_task_statistics(report.task_id, persist=True)
@@ -83,7 +104,13 @@ class ReportService(BaseService):
                     "failed_cases": task.failed_cases,
                 },
                 "statistics": statistics.model_dump(mode="json") if statistics else {},
-                "results": [item.model_dump(mode="json") for item in results],
+                "results": [
+                    {
+                        **item.model_dump(mode="json"),
+                        "detail_url": self._attempt_url(report.task_id, item.attempt_id),
+                    }
+                    for item in results
+                ],
             }
 
             template_version = (
@@ -217,12 +244,15 @@ class ReportService(BaseService):
             "",
             "## 高风险案例 Top 10",
             "",
+            "> 尝试 ID 为可点击链接，点击后打开前端任务详情并自动展开该条完整证据链（原始提示词、模型输出、Judge、规则命中、六维风险）。",
+            "",
             "| 尝试 ID | 外部用例 ID | 模型 ID | 模板 ID | 风险分 | 风险等级 |",
             "|---:|---|---:|---:|---:|---|",
         ])
         for item in stats.get("top_risky_cases", []):
+            link = f"[{item['attempt_id']}]({self._attempt_url(task['task_id'], item['attempt_id'])})"
             lines.append(
-                f"| {item['attempt_id']} | {item.get('external_id') or ''} | {item['model_id']} | "
+                f"| {link} | {item.get('external_id') or ''} | {item['model_id']} | "
                 f"{item.get('attack_template_id') or ''} | {item['overall_score']} | {item['risk_level']} |"
             )
 
@@ -236,8 +266,9 @@ class ReportService(BaseService):
         for item in results[:200]:
             judge = item.get("judge") or {}
             risk = item.get("risk") or {}
+            link = f"[{item['attempt_id']}]({self._attempt_url(task['task_id'], item['attempt_id'])})"
             lines.append(
-                f"| {item['attempt_id']} | {item.get('external_id') or ''} | {item['model_id']} | "
+                f"| {link} | {item.get('external_id') or ''} | {item['model_id']} | "
                 f"{judge.get('verdict', '')} | {risk.get('overall_score', '')} | "
                 f"{risk.get('risk_level', '')} | {item.get('manual_review_status', '')} |"
             )
@@ -254,7 +285,7 @@ class ReportService(BaseService):
         ]
         result_rows = [
             (
-                item["attempt_id"],
+                RawHtml(self._attempt_link_html(task["task_id"], item["attempt_id"])),
                 item.get("external_id") or "",
                 item["model_id"],
                 (item.get("judge") or {}).get("verdict", ""),
@@ -263,6 +294,17 @@ class ReportService(BaseService):
                 item.get("manual_review_status", ""),
             )
             for item in results[:200]
+        ]
+        top_rows = [
+            (
+                RawHtml(self._attempt_link_html(task["task_id"], item["attempt_id"])),
+                item.get("external_id") or "",
+                item["model_id"],
+                item.get("attack_template_id") or "",
+                item["overall_score"],
+                item["risk_level"],
+            )
+            for item in stats.get("top_risky_cases", [])
         ]
         return f"""<!doctype html>
 <html lang="zh-CN">
@@ -286,6 +328,9 @@ class ReportService(BaseService):
   {self._html_table(["风险等级", "数量"], level_rows)}
   <h2>风险类别分布</h2>
   {self._html_table(["风险类别", "数量", "平均风险分"], category_rows)}
+  <h2>高风险案例 Top 10</h2>
+  <p>点击尝试 ID 可打开前端任务详情，并自动展开该条的原始提示词、模型输出、Judge 判断、规则命中与六维风险。</p>
+  {self._html_table(["尝试 ID", "外部用例 ID", "模型 ID", "模板 ID", "风险分", "风险等级"], top_rows)}
   <h2>逐条结果摘要</h2>
   {self._html_table(["尝试 ID", "用例 ID", "模型 ID", "Judge", "风险分", "风险等级", "复核状态"], result_rows)}
 </body>
@@ -305,7 +350,17 @@ class ReportService(BaseService):
                 value = json.dumps(value, ensure_ascii=False)
             writer.writerow(["statistics", key, value])
         writer.writerow([])
-        writer.writerow(["attempt_id", "external_id", "model_id", "attack_template_id", "verdict", "risk_score", "risk_level", "manual_review_status"])
+        writer.writerow([
+            "attempt_id",
+            "external_id",
+            "model_id",
+            "attack_template_id",
+            "verdict",
+            "risk_score",
+            "risk_level",
+            "manual_review_status",
+            "detail_url",
+        ])
         for item in data["results"]:
             judge = item.get("judge") or {}
             risk = item.get("risk") or {}
@@ -318,6 +373,7 @@ class ReportService(BaseService):
                 risk.get("overall_score", ""),
                 risk.get("risk_level", ""),
                 item.get("manual_review_status", ""),
+                self._attempt_url(task["task_id"], item["attempt_id"]),
             ])
         return buffer.getvalue()
 
@@ -387,9 +443,16 @@ class ReportService(BaseService):
 
         story.append(Spacer(1, 12))
         story.append(Paragraph("高风险案例 Top 10", styles["Heading2"]))
+        story.append(Paragraph("尝试 ID 为可点击链接，点击可打开前端任务详情并展开完整证据链。", styles["BodyText"]))
         top_rows = [["尝试 ID", "用例 ID", "风险分", "风险等级"]]
         for item in stats.get("top_risky_cases", []):
-            top_rows.append([item["attempt_id"], item.get("external_id") or "", item["overall_score"], item["risk_level"]])
+            url = self._attempt_url(task["task_id"], item["attempt_id"]).replace("&", "&amp;")
+            top_rows.append([
+                Paragraph(f'<link href="{url}"><u>{item["attempt_id"]}</u></link>', styles["BodyText"]),
+                item.get("external_id") or "",
+                item["overall_score"],
+                item["risk_level"],
+            ])
         top_table = Table(top_rows, colWidths=[100, 180, 100, 100])
         top_table.setStyle(
             TableStyle(
@@ -405,9 +468,14 @@ class ReportService(BaseService):
         return buffer.getvalue()
 
     def _html_table(self, headers: list[str], rows: list[list[Any]]) -> str:
+        def render_cell(value: Any) -> str:
+            if isinstance(value, RawHtml):
+                return str(value)
+            return html.escape(str(value))
+
         head = "".join(f"<th>{html.escape(str(item))}</th>" for item in headers)
         body = "".join(
-            "<tr>" + "".join(f"<td>{html.escape(str(cell))}</td>" for cell in row) + "</tr>"
+            "<tr>" + "".join(f"<td>{render_cell(value)}</td>" for value in row) + "</tr>"
             for row in rows
         )
         return f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
@@ -458,17 +526,30 @@ class ReportTemplateService(BaseService):
 
 class ReportAutomationService(BaseService):
     def trigger_if_task_complete(self, task_id: int, report_format: str | None = None) -> Report | None:
+        report, _ = self.ensure_auto_report(task_id, report_format)
+        return report
+
+    def ensure_auto_report(
+        self,
+        task_id: int,
+        report_format: str | None = None,
+    ) -> tuple[Report | None, bool]:
+        """任务全部结束时确保存在一份自动报告。
+
+        返回 ``(报告, 本次是否新建)``。只有新建的那一次才需要投递生成任务，
+        否则每条用例完成时都会重复投递，导致同一份报告被生成几十次。
+        """
         task = self.uow.evaluation_tasks.get(task_id)
         if task is None:
-            return None
+            return None, False
 
         task_cases = self.uow.task_cases.list(page=1, page_size=100000, task_id=task_id)
         if not task_cases:
-            return None
+            return None, False
 
         terminal = {"succeeded", "failed", "cancelled", "skipped"}
         if any(task_case.status not in terminal for task_case in task_cases):
-            return None
+            return None, False
 
         existing = self.uow.reports.list(
             page=1,
@@ -477,7 +558,7 @@ class ReportAutomationService(BaseService):
             report_type="auto",
         )
         if existing:
-            return existing[0]
+            return existing[0], False
 
         task_config = task.config or {}
         chosen_format = report_format or task_config.get("auto_report_format") or "pdf"
@@ -489,4 +570,4 @@ class ReportAutomationService(BaseService):
             filter_snapshot={},
             report_version="v1",
         )
-        return self.uow.reports.add(report)
+        return self.uow.reports.add(report), True

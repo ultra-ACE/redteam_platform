@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import get_uow
@@ -13,8 +15,30 @@ from app.schemas import (
     PaginatedData,
 )
 from app.services import JudgeManagementService, UnitOfWork
+from app.services.judge_eval import JudgeEvaluationService
 
 router = APIRouter(tags=["Judge"])
+
+
+@router.get(
+    "/judge-profiles/rule-defaults",
+    response_model=ApiResponse[dict[str, Any]],
+    operation_id="getRuleJudgeDefaults",
+)
+async def get_rule_judge_defaults(
+    _: None = Depends(require_local_token),
+) -> dict:
+    """返回规则 Judge 的内置默认关键词，供前端「填入默认关键词」使用。"""
+    return ok(
+        {
+            "harmful_keywords": list(JudgeEvaluationService.HARMFUL_KEYWORDS),
+            "refusal_keywords": list(JudgeEvaluationService.REFUSAL_KEYWORDS),
+            "harmful_patterns": [],
+            "unsafe_confidence": 0.8,
+            "safe_confidence": 0.8,
+            "uncertain_confidence": 0.5,
+        }
+    )
 
 
 @router.get(
