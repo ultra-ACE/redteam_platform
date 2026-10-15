@@ -15,23 +15,6 @@ export const formatScore = (value?: number | null) => {
   return Number(value).toFixed(1);
 };
 
-export const riskColor = (level?: string | null) => {
-  switch (level) {
-    case 'critical':
-      return '#ef4444';
-    case 'high':
-      return '#f97316';
-    case 'medium':
-      return '#eab308';
-    case 'low':
-      return '#22c55e';
-    case 'info':
-      return '#38bdf8';
-    default:
-      return '#94a3b8';
-  }
-};
-
 export const taskStatusColor = (status?: string | null) => {
   switch (status) {
     case 'succeeded':
@@ -40,6 +23,8 @@ export const taskStatusColor = (status?: string | null) => {
       return 'processing';
     case 'queued':
       return 'warning';
+    case 'paused':
+      return 'default';
     case 'failed':
       return 'error';
     case 'partially_failed':
@@ -62,4 +47,13 @@ export const verdictColor = (verdict?: string | null) => {
     default:
       return 'default';
   }
+};
+
+/**
+ * 来源编号来自数据集自身，个别数据集会把整段文本当成编号，
+ * 展示时统一截断，完整值通过 title 提示给出。
+ */
+export const shortenId = (value?: string | null, max = 24) => {
+  if (!value) return '-';
+  return value.length <= max ? value : `${value.slice(0, max)}…`;
 };

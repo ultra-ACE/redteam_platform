@@ -60,6 +60,7 @@ services:
       CELERY_TASK_ALWAYS_EAGER: "false"
       TZ: Asia/Shanghai
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://127.0.0.1:5173}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -96,6 +97,7 @@ services:
       CELERY_TASK_ALWAYS_EAGER: "false"
       TZ: Asia/Shanghai
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://127.0.0.1:5173}
     volumes:
       - appdata:/app/data
     depends_on:

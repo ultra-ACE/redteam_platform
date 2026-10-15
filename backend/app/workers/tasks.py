@@ -5,11 +5,9 @@ from typing import Any
 
 from app.db.session import SessionLocal
 from app.services import (
-    AuditLogService,
     JudgeEvaluationService,
     ReportAutomationService,
     ReportService,
-    RiskScoringService,
     RuleValidationService,
     TaskExecutionService,
     UnitOfWork,
@@ -92,28 +90,17 @@ def judge_attempt(attempt_id: int) -> None:
 
 @celery_app.task(name="workers.validate_rules")
 def validate_rules(attempt_id: int) -> None:
-    with SessionLocal() as session:
-        uow = UnitOfWork(session)
-        service = RuleValidationService(uow)
-        service.validate_attempt(attempt_id)
-        uow.commit()
-    quantify_risk.delay(attempt_id)
-
-
-@celery_app.task(name="workers.quantify_risk")
-def quantify_risk(attempt_id: int) -> None:
     report_id: int | None = None
     with SessionLocal() as session:
         uow = UnitOfWork(session)
-        RiskScoringService(uow).quantify_attempt(attempt_id)
+        RuleValidationService(uow).validate_attempt(attempt_id)
         attempt = uow.task_attempts.get(attempt_id)
         task_case = uow.task_cases.get(attempt.task_case_id) if attempt else None
         if task_case is not None:
-            report = ReportAutomationService(uow).trigger_if_task_complete(task_case.task_id)
-            if report is not None and report.status == "queued":
+            report, created = ReportAutomationService(uow).ensure_auto_report(task_case.task_id)
+            if created and report is not None:
                 report_id = report.id
         uow.commit()
-
     if report_id is not None:
         generate_report.delay(report_id)
 
@@ -122,15 +109,5 @@ def quantify_risk(attempt_id: int) -> None:
 def generate_report(report_id: int) -> None:
     with SessionLocal() as session:
         uow = UnitOfWork(session)
-        report = ReportService(uow).generate_report(report_id)
-        AuditLogService(uow).record(
-            actor="system",
-            action="report.generate",
-            resource_type="report",
-            resource_id=report_id,
-            after_data={
-                "status": report.status if report else "unknown",
-                "format": report.format if report else None,
-            },
-        )
+        ReportService(uow).generate_report(report_id)
         uow.commit()

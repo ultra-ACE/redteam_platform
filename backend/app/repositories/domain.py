@@ -1,37 +1,23 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.models import (
-    AttackMethod,
     AttackTemplate,
-    AuditLog,
     Benchmark,
-    BenchmarkRiskMapping,
     BenchmarkVersion,
     EvaluationTask,
-    IdempotencyKey,
     JudgeProfile,
     JudgeResult,
     ManualReview,
     ModelRegistry,
     Report,
-    ReportTemplate,
-    ReportTemplateVersion,
-    RiskAssessment,
-    RiskCategory,
-    RiskDimensionScore,
-    RiskTaxonomy,
     RuleDefinition,
     RuleSet,
     RuleValidationResult,
-    StatisticsSnapshot,
     StoredFile,
-    SystemConfig,
     TaskAttempt,
     TaskCase,
-    TaskEvent,
     TaskModelBinding,
     TestCase,
-    TestCaseRiskLabel,
 )
 from app.repositories.base import BaseRepository
 
@@ -48,28 +34,8 @@ class TestCaseRepository(BaseRepository[TestCase]):
     model = TestCase
 
 
-class TestCaseRiskLabelRepository(BaseRepository[TestCaseRiskLabel]):
-    model = TestCaseRiskLabel
-
-
-class RiskTaxonomyRepository(BaseRepository[RiskTaxonomy]):
-    model = RiskTaxonomy
-
-
-class RiskCategoryRepository(BaseRepository[RiskCategory]):
-    model = RiskCategory
-
-
-class BenchmarkRiskMappingRepository(BaseRepository[BenchmarkRiskMapping]):
-    model = BenchmarkRiskMapping
-
-
 class ModelRepository(BaseRepository[ModelRegistry]):
     model = ModelRegistry
-
-
-class AttackMethodRepository(BaseRepository[AttackMethod]):
-    model = AttackMethod
 
 
 class AttackTemplateRepository(BaseRepository[AttackTemplate]):
@@ -96,10 +62,6 @@ class TaskAttemptRepository(BaseRepository[TaskAttempt]):
     model = TaskAttempt
 
 
-class TaskEventRepository(BaseRepository[TaskEvent]):
-    model = TaskEvent
-
-
 class JudgeProfileRepository(BaseRepository[JudgeProfile]):
     model = JudgeProfile
 
@@ -120,49 +82,21 @@ class RuleValidationResultRepository(BaseRepository[RuleValidationResult]):
     model = RuleValidationResult
 
 
-class RiskAssessmentRepository(BaseRepository[RiskAssessment]):
-    model = RiskAssessment
-
-
-class RiskDimensionScoreRepository(BaseRepository[RiskDimensionScore]):
-    model = RiskDimensionScore
-
-
 class ManualReviewRepository(BaseRepository[ManualReview]):
     model = ManualReview
-
-
-class StatisticsSnapshotRepository(BaseRepository[StatisticsSnapshot]):
-    model = StatisticsSnapshot
 
 
 class ReportRepository(BaseRepository[Report]):
     model = Report
 
-
-class ReportTemplateRepository(BaseRepository[ReportTemplate]):
-    model = ReportTemplate
-
-
-class ReportTemplateVersionRepository(BaseRepository[ReportTemplateVersion]):
-    model = ReportTemplateVersion
+    def claim_for_generation(self, report_id: int) -> bool:
+        result = self.session.execute(
+            update(Report)
+            .where(Report.id == report_id, Report.status == "queued")
+            .values(status="generating")
+        )
+        return (result.rowcount or 0) == 1
 
 
 class FileRepository(BaseRepository[StoredFile]):
     model = StoredFile
-
-
-class SystemConfigRepository(BaseRepository[SystemConfig]):
-    model = SystemConfig
-
-    def get_by_key(self, config_key: str) -> SystemConfig | None:
-        stmt = select(SystemConfig).where(SystemConfig.config_key == config_key)
-        return self.session.scalar(stmt)
-
-
-class AuditLogRepository(BaseRepository[AuditLog]):
-    model = AuditLog
-
-
-class IdempotencyKeyRepository(BaseRepository[IdempotencyKey]):
-    model = IdempotencyKey

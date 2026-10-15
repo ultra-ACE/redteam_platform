@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DownloadOutlined, FileTextOutlined, SearchOutlined } from '@ant-design/icons';
-import { Button, Col, InputNumber, Row, Select, Space, Tag, message } from 'antd';
+import { Button, Col, InputNumber, Row, Space, Tag, message } from 'antd';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createReport, downloadReport, getReport } from '../api';
 import { PageHeader, SectionCard } from '../components/ui';
@@ -9,7 +9,6 @@ import { formatDateTime } from '../utils/format';
 
 export function ReportsPage() {
   const [taskId, setTaskId] = useState(1);
-  const [format, setFormat] = useState('pdf');
   const [reportId, setReportId] = useState<number | null>(null);
 
   const createMutation = useMutation({
@@ -17,8 +16,8 @@ export function ReportsPage() {
       createReport({
         task_id: taskId,
         report_type: 'full',
-        format,
-        include: ['summary', 'risk_distribution', 'case_details', 'judge_trust', 'rule_hits', 'manual_reviews'],
+        format: 'html',
+        include: ['summary', 'judge_distribution', 'dataset_types', 'case_details', 'judge_trust', 'rule_hits', 'manual_reviews'],
         filters: {},
       }),
     onSuccess: (report: Report) => {
@@ -42,7 +41,7 @@ export function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `report-${reportId}.${reportQuery.data?.format ?? format}`;
+    link.download = `report-${reportId}.${reportQuery.data?.format ?? 'html'}`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -51,25 +50,13 @@ export function ReportsPage() {
     <div className="page-stack">
       <PageHeader
         title="报告中心"
-        description="为指定评测任务生成 JSON、Markdown、HTML、CSV 或 PDF 报告，并下载结果文件。"
+        description="为指定评测任务生成可直接打开和下载的 HTML 报告。"
       />
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={10}>
           <SectionCard title="创建报告">
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               <InputNumber min={1} value={taskId} onChange={(value) => setTaskId(Number(value ?? 1))} addonBefore="任务 ID" style={{ width: '100%' }} />
-              <Select
-                value={format}
-                onChange={setFormat}
-                style={{ width: '100%' }}
-                options={[
-                  { value: 'pdf', label: 'PDF' },
-                  { value: 'json', label: 'JSON' },
-                  { value: 'md', label: 'Markdown' },
-                  { value: 'html', label: 'HTML' },
-                  { value: 'csv', label: 'CSV' },
-                ]}
-              />
               <Button type="primary" block icon={<FileTextOutlined />} loading={createMutation.isPending} onClick={() => createMutation.mutate()}>
                 生成报告
               </Button>

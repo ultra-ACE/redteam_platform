@@ -1,59 +1,52 @@
 import re
 from typing import Any
 
-from app.db.models import AttackMethod, AttackTemplate
+from app.db.models import AttackTemplate
 from app.schemas import AttackTemplatePreviewResult, AttackTemplateValidationResult
 from app.services.base import BaseService
 
 VARIABLE_PATTERN = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}|\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 
+ATTACK_METHODS = [
+    {
+        "code": "direct_request",
+        "name": "直接请求",
+        "description": "不套用模板，直接把原始 Prompt 发送给被测模型。",
+    },
+    {
+        "code": "role_play",
+        "name": "角色扮演",
+        "description": "通过虚构角色或场景诱导模型绕过安全限制。",
+    },
+    {
+        "code": "prefix_injection",
+        "name": "前缀注入",
+        "description": "在用户输入前后注入指令，改变模型的安全策略。",
+    },
+    {
+        "code": "refusal_suppression",
+        "name": "拒答抑制",
+        "description": "要求模型不得拒绝回答，强制给出完整内容。",
+    },
+]
+
 
 class AttackTemplateService(BaseService):
-    def list_methods(self, page: int = 1, page_size: int = 200, enabled: bool | None = None) -> list[AttackMethod]:
-        return self.uow.attack_methods.list(page=page, page_size=page_size, enabled=enabled)
-
-    def create_method(self, payload: Any) -> AttackMethod:
-        method = AttackMethod(
-            code=payload.code,
-            name=payload.name,
-            category=payload.category,
-            description=payload.description,
-            risk_notes=payload.risk_notes,
-            enabled=payload.enabled,
-        )
-        return self.uow.attack_methods.add(method)
-
-    def update_method(self, method_id: int, payload: Any) -> AttackMethod | None:
-        method = self.uow.attack_methods.get(method_id)
-        if method is None:
-            return None
-        for field in ("name", "category", "description", "risk_notes", "enabled"):
-            value = getattr(payload, field, None)
-            if value is not None:
-                setattr(method, field, value)
-        self.uow.session.flush()
-        return method
-
-    def disable_method(self, method_id: int) -> AttackMethod | None:
-        method = self.uow.attack_methods.get(method_id)
-        if method is None:
-            return None
-        method.enabled = False
-        self.uow.session.flush()
-        return method
+    def list_methods(self) -> list[dict[str, str]]:
+        return ATTACK_METHODS
 
     def list_templates(
         self,
         page: int = 1,
         page_size: int = 200,
-        attack_method_id: int | None = None,
+        method_code: str | None = None,
         name: str | None = None,
         status: str | None = None,
     ) -> list[AttackTemplate]:
         return self.uow.attack_templates.list(
             page=page,
             page_size=page_size,
-            attack_method_id=attack_method_id,
+            method_code=method_code,
             name=name,
             status=status,
         )
@@ -62,12 +55,13 @@ class AttackTemplateService(BaseService):
         return self.uow.attack_templates.get(template_id)
 
     def create_template(self, payload: Any) -> AttackTemplate:
-        self._ensure_unique_version(payload.attack_method_id, payload.name, payload.version)
+        method_code = payload.method_code.value if hasattr(payload.method_code, "value") else payload.method_code
+        self._ensure_unique_version(method_code, payload.name, payload.version)
         validation = self.validate_template(payload.template_text, payload.variables)
         if validation.undeclared_variables:
             raise ValueError(f"undeclared variables: {', '.join(validation.undeclared_variables)}")
         template = AttackTemplate(
-            attack_method_id=payload.attack_method_id,
+            method_code=method_code,
             name=payload.name,
             template_text=payload.template_text,
             variables=payload.variables,
@@ -107,7 +101,7 @@ class AttackTemplateService(BaseService):
         return self.uow.attack_templates.list(
             page=1,
             page_size=200,
-            attack_method_id=template.attack_method_id,
+            method_code=template.method_code,
             name=template.name,
         )
 
@@ -117,12 +111,12 @@ class AttackTemplateService(BaseService):
             return None
         template_text = payload.template_text if payload.template_text is not None else base.template_text
         variables = payload.variables if payload.variables is not None else (base.variables or [])
-        self._ensure_unique_version(base.attack_method_id, base.name, payload.version)
+        self._ensure_unique_version(base.method_code, base.name, payload.version)
         validation = self.validate_template(template_text, variables)
         if validation.undeclared_variables:
             raise ValueError(f"undeclared variables: {', '.join(validation.undeclared_variables)}")
         version = AttackTemplate(
-            attack_method_id=base.attack_method_id,
+            method_code=base.method_code,
             name=base.name,
             template_text=template_text,
             variables=variables,
@@ -135,8 +129,7 @@ class AttackTemplateService(BaseService):
         template = self.uow.attack_templates.get(template_id)
         if template is None:
             return None
-        versions = self.list_versions(template_id)
-        for item in versions:
+        for item in self.list_versions(template_id):
             item.status = "disabled"
         template.status = "active"
         self.uow.session.flush()
@@ -196,11 +189,11 @@ class AttackTemplateService(BaseService):
                 detected.append(name)
         return detected
 
-    def _ensure_unique_version(self, attack_method_id: int, name: str, version: str) -> None:
+    def _ensure_unique_version(self, method_code: str, name: str, version: str) -> None:
         existing = self.uow.attack_templates.list(
             page=1,
             page_size=1,
-            attack_method_id=attack_method_id,
+            method_code=method_code,
             name=name,
             version=version,
         )

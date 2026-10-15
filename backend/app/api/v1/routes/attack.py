@@ -5,8 +5,6 @@ from app.api.utils import ok, require_local_token
 from app.schemas import (
     ApiResponse,
     AttackMethod,
-    AttackMethodCreateRequest,
-    AttackMethodUpdateRequest,
     AttackTemplate,
     AttackTemplateCreateRequest,
     AttackTemplatePreviewRequest,
@@ -30,64 +28,15 @@ router = APIRouter()
 async def list_attack_methods(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
-    enabled: bool | None = None,
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
     service = AttackTemplateService(uow)
-    items = service.list_methods(page=page, page_size=page_size, enabled=enabled)
-    total = uow.attack_methods.count(enabled=enabled)
-    return ok(PaginatedData[AttackMethod](items=items, page=page, page_size=page_size, total=total).model_dump())
-
-
-@router.post(
-    "/attack-methods",
-    response_model=ApiResponse[AttackMethod],
-    operation_id="createAttackMethod",
-    tags=["攻击方法"],
-)
-async def create_attack_method(
-    payload: AttackMethodCreateRequest,
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    method = AttackTemplateService(uow).create_method(payload)
-    return ok(AttackMethod.model_validate(method).model_dump())
-
-
-@router.patch(
-    "/attack-methods/{method_id}",
-    response_model=ApiResponse[AttackMethod],
-    operation_id="updateAttackMethod",
-    tags=["攻击方法"],
-)
-async def update_attack_method(
-    method_id: int,
-    payload: AttackMethodUpdateRequest,
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    method = AttackTemplateService(uow).update_method(method_id, payload)
-    if method is None:
-        raise HTTPException(status_code=404, detail="attack method not found")
-    return ok(AttackMethod.model_validate(method).model_dump())
-
-
-@router.delete(
-    "/attack-methods/{method_id}",
-    response_model=ApiResponse[AttackMethod],
-    operation_id="disableAttackMethod",
-    tags=["攻击方法"],
-)
-async def disable_attack_method(
-    method_id: int,
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    method = AttackTemplateService(uow).disable_method(method_id)
-    if method is None:
-        raise HTTPException(status_code=404, detail="attack method not found")
-    return ok(AttackMethod.model_validate(method).model_dump())
+    items = service.list_methods()
+    start = (page - 1) * page_size
+    paged = items[start:start + page_size]
+    total = len(items)
+    return ok(PaginatedData[AttackMethod](items=paged, page=page, page_size=page_size, total=total).model_dump())
 
 
 @router.get(
@@ -99,7 +48,7 @@ async def disable_attack_method(
 async def list_attack_templates(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
-    attack_method_id: int | None = None,
+    method_code: str | None = None,
     name: str | None = None,
     status: str | None = None,
     _: None = Depends(require_local_token),
@@ -109,11 +58,11 @@ async def list_attack_templates(
     items = service.list_templates(
         page=page,
         page_size=page_size,
-        attack_method_id=attack_method_id,
+        method_code=method_code,
         name=name,
         status=status,
     )
-    total = uow.attack_templates.count(attack_method_id=attack_method_id, status=status)
+    total = uow.attack_templates.count(method_code=method_code, status=status)
     return ok(PaginatedData[AttackTemplate](items=items, page=page, page_size=page_size, total=total).model_dump())
 
 

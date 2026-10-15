@@ -5,8 +5,9 @@ import type {
   AttackTemplate,
   AttackTemplatePreviewResult,
   AttackTemplateValidationResult,
-  AuditLog,
+  AttemptDetail,
   Benchmark,
+  BenchmarkAdapter,
   BenchmarkImportResult,
   BenchmarkVersion,
   EvaluationResult,
@@ -20,15 +21,9 @@ import type {
   ModelRecord,
   PaginatedData,
   Report,
-  ReportTemplate,
-  ReportTemplateVersion,
   RetryFailedData,
-  RiskCategory,
-  RiskMappingStatus,
-  RiskTaxonomy,
   Statistics,
   StoredFile,
-  SystemConfig,
   TaskStatusData,
   TestCase,
 } from '../types/api';
@@ -48,6 +43,11 @@ export const createModel = async (payload: Record<string, unknown>) => {
   return data.data;
 };
 
+export const updateModel = async (modelId: number, payload: Record<string, unknown>) => {
+  const { data } = await apiClient.patch<ApiEnvelope<ModelRecord>>(`/models/${modelId}`, payload);
+  return data.data;
+};
+
 export type ModelHealthResult = {
   model_id: number;
   status: string;
@@ -64,7 +64,6 @@ export const checkModelHealth = async (modelId: number) => {
   return data.data;
 };
 
-
 export const importBenchmark = async (payload: FormData) => {
   const { data } = await apiClient.post<ApiEnvelope<BenchmarkImportResult>>('/benchmarks/import', payload, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -72,11 +71,14 @@ export const importBenchmark = async (payload: FormData) => {
   return data.data;
 };
 
+export const listBenchmarkAdapters = async () => {
+  const { data } = await apiClient.get<ApiEnvelope<BenchmarkAdapter[]>>('/benchmarks/adapters');
+  return data.data;
+};
+
 export type DeleteSummary = {
   deleted_versions: number;
   deleted_test_cases: number;
-  deleted_labels: number;
-  deleted_mappings: number;
 };
 
 export const deleteBenchmark = async (benchmarkId: number) => {
@@ -139,9 +141,28 @@ export const getTaskStatistics = async (taskId: number) => {
   return data.data;
 };
 
+export const getTaskAttemptDetail = async (attemptId: number) => {
+  const { data } = await apiClient.get<ApiEnvelope<AttemptDetail>>(`/task-attempts/${attemptId}`);
+  return data.data;
+};
+
 export const startTask = async (taskId: number) => {
   const { data } = await apiClient.post<ApiEnvelope<{ task_id: number; status: string }>>(
     `/evaluation-tasks/${taskId}/actions/start`,
+  );
+  return data.data;
+};
+
+export const pauseTask = async (taskId: number) => {
+  const { data } = await apiClient.post<ApiEnvelope<{ task_id: number; status: string }>>(
+    `/evaluation-tasks/${taskId}/actions/pause`,
+  );
+  return data.data;
+};
+
+export const resumeTask = async (taskId: number) => {
+  const { data } = await apiClient.post<ApiEnvelope<{ task_id: number; status: string }>>(
+    `/evaluation-tasks/${taskId}/actions/resume`,
   );
   return data.data;
 };
@@ -156,38 +177,6 @@ export const cancelTask = async (taskId: number) => {
 export const retryFailedTask = async (taskId: number) => {
   const { data } = await apiClient.post<ApiEnvelope<RetryFailedData>>(
     `/evaluation-tasks/${taskId}/actions/retry-failed`,
-  );
-  return data.data;
-};
-
-export const listReportTemplates = async (params?: Record<string, unknown>) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<ReportTemplate>>>('/report-templates', { params });
-  return data.data;
-};
-
-export const createReportTemplate = async (payload: Record<string, unknown>) => {
-  const { data } = await apiClient.post<ApiEnvelope<ReportTemplate>>('/report-templates', payload);
-  return data.data;
-};
-
-export const listReportTemplateVersions = async (templateId: number) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<ReportTemplateVersion>>>(
-    `/report-templates/${templateId}/versions`,
-  );
-  return data.data;
-};
-
-export const createReportTemplateVersion = async (templateId: number, payload: Record<string, unknown>) => {
-  const { data } = await apiClient.post<ApiEnvelope<ReportTemplateVersion>>(
-    `/report-templates/${templateId}/versions`,
-    payload,
-  );
-  return data.data;
-};
-
-export const publishReportTemplateVersion = async (versionId: number) => {
-  const { data } = await apiClient.post<ApiEnvelope<ReportTemplateVersion>>(
-    `/report-template-versions/${versionId}/publish`,
   );
   return data.data;
 };
@@ -207,46 +196,13 @@ export const downloadReport = async (reportId: number) => {
   return response;
 };
 
-export const listSystemConfigs = async (params?: Record<string, unknown>) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<SystemConfig>>>('/system-configs', { params });
-  return data.data;
-};
-
-export const updateSystemConfig = async (configKey: string, value: unknown) => {
-  const { data } = await apiClient.patch<ApiEnvelope<SystemConfig>>(`/system-configs/${configKey}`, {
-    config_value: value,
-  });
-  return data.data;
-};
-
-export const listAuditLogs = async (params?: Record<string, unknown>) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<AuditLog>>>('/audit-logs', { params });
-  return data.data;
-};
-
-export const listAttackMethods = async (params?: Record<string, unknown>) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<AttackMethod>>>('/attack-methods', { params });
+export const listAttackMethods = async () => {
+  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<AttackMethod>>>('/attack-methods');
   return data.data;
 };
 
 export const createAttackTemplate = async (payload: Record<string, unknown>) => {
   const { data } = await apiClient.post<ApiEnvelope<AttackTemplate>>('/attack-templates', payload);
-  return data.data;
-};
-
-
-export const createAttackMethod = async (payload: Record<string, unknown>) => {
-  const { data } = await apiClient.post<ApiEnvelope<AttackMethod>>('/attack-methods', payload);
-  return data.data;
-};
-
-export const updateAttackMethod = async (methodId: number, payload: Record<string, unknown>) => {
-  const { data } = await apiClient.patch<ApiEnvelope<AttackMethod>>(`/attack-methods/${methodId}`, payload);
-  return data.data;
-};
-
-export const disableAttackMethod = async (methodId: number) => {
-  const { data } = await apiClient.delete<ApiEnvelope<AttackMethod>>(`/attack-methods/${methodId}`);
   return data.data;
 };
 
@@ -271,7 +227,6 @@ export const validateAttackTemplate = async (templateId: number) => {
   );
   return data.data;
 };
-
 
 export const previewAttackTemplate = async (templateId: number, variables: Record<string, unknown>) => {
   const { data } = await apiClient.post<ApiEnvelope<AttackTemplatePreviewResult>>(
@@ -323,7 +278,6 @@ export const createJudgeProfile = async (payload: Record<string, unknown>) => {
   return data.data;
 };
 
-
 export const getJudgeProfile = async (profileId: number) => {
   const { data } = await apiClient.get<ApiEnvelope<JudgeProfile>>(`/judge-profiles/${profileId}`);
   return data.data;
@@ -356,7 +310,6 @@ export const listManualReviews = async (params?: Record<string, unknown>) => {
   return data.data;
 };
 
-
 export const getManualReview = async (reviewId: number) => {
   const { data } = await apiClient.get<ApiEnvelope<ManualReviewDetail>>(`/manual-reviews/${reviewId}`);
   return data.data;
@@ -372,52 +325,8 @@ export const updateManualReview = async (reviewId: number, payload: Record<strin
   return data.data;
 };
 
-export const listRiskTaxonomies = async (params?: Record<string, unknown>) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<RiskTaxonomy>>>('/risk-taxonomies', { params });
-  return data.data;
-};
-
-
-export const listRiskCategories = async (taxonomyId: number) => {
-  const { data } = await apiClient.get<ApiEnvelope<RiskCategory[]>>(`/risk-taxonomies/${taxonomyId}/categories`);
-  return data.data;
-};
-
-export const createRiskCategory = async (taxonomyId: number, payload: Record<string, unknown>) => {
-  const { data } = await apiClient.post<ApiEnvelope<RiskCategory>>(`/risk-taxonomies/${taxonomyId}/categories`, payload);
-  return data.data;
-};
-
-export const getRiskMappingStatus = async (benchmarkVersionId: number) => {
-  const { data } = await apiClient.get<ApiEnvelope<RiskMappingStatus>>(
-    `/benchmark-versions/${benchmarkVersionId}/mapping-status`,
-  );
-  return data.data;
-};
-
-export const batchUpsertRiskMappings = async (benchmarkVersionId: number, mappings: Array<Record<string, unknown>>) => {
-  const { data } = await apiClient.post<ApiEnvelope<{ created_count: number; updated_count: number; remaining_unresolved_count: number }>>(
-    `/benchmark-versions/${benchmarkVersionId}/risk-mappings/batch`,
-    { mappings },
-  );
-  return data.data;
-};
-
-export const createRiskTaxonomy = async (payload: Record<string, unknown>) => {
-  const { data } = await apiClient.post<ApiEnvelope<RiskTaxonomy>>('/risk-taxonomies', payload);
-  return data.data;
-};
-
-
 export const listFiles = async (params?: Record<string, unknown>) => {
   const { data } = await apiClient.get<ApiEnvelope<PaginatedData<StoredFile>>>('/files', { params });
-  return data.data;
-};
-
-export const uploadFile = async (payload: FormData) => {
-  const { data } = await apiClient.post<ApiEnvelope<StoredFile>>('/files', payload, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
   return data.data;
 };
 

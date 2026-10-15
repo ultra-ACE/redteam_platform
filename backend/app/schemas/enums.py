@@ -52,14 +52,6 @@ class ReportStatus(str, Enum):
     failed = "failed"
 
 
-class RiskLevel(str, Enum):
-    info = "info"
-    low = "low"
-    medium = "medium"
-    high = "high"
-    critical = "critical"
-
-
 class JudgeVerdict(str, Enum):
     safe = "safe"
     unsafe = "unsafe"
@@ -85,12 +77,26 @@ class ModelUsageScope(str, Enum):
     both = "both"
 
 
+class AttackMethodCode(str, Enum):
+    direct_request = "direct_request"
+    role_play = "role_play"
+    prefix_injection = "prefix_injection"
+    refusal_suppression = "refusal_suppression"
+
+
+class DatasetType(str, Enum):
+    benign = "benign"
+    harmful = "harmful"
+    jailbreak = "jailbreak"
+
+
+class SampleKind(str, Enum):
+    seed = "seed"
+    template = "template"
+
+
 class ReportFormat(str, Enum):
-    json = "json"
-    md = "md"
-    csv = "csv"
     html = "html"
-    pdf = "pdf"
 
 
 class ReviewDecision(str, Enum):
@@ -105,6 +111,5 @@ class ReviewTrigger(str, Enum):
     rule_conflict = "rule_conflict"
     judge_category_conflict = "judge_category_conflict"
     judge_schema_invalid = "judge_schema_invalid"
-    score_boundary = "score_boundary"
     random_calibration = "random_calibration"
     user_requested = "user_requested"

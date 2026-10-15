@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card, Empty, Flex, Tag, Typography } from 'antd';
 import type { CardProps } from 'antd';
-import { riskColor, taskStatusColor, verdictColor } from '../utils/format';
+import { taskStatusColor, verdictColor } from '../utils/format';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -66,20 +66,6 @@ export function JudgeVerdictTag({ verdict }: { verdict?: string | null }) {
   return (
     <Tag className="soft-tag" color={verdictColor(verdict)}>
       {verdict ?? 'unknown'}
-    </Tag>
-  );
-}
-
-export function RiskLevelTag({ level }: { level?: string | null }) {
-  return (
-    <Tag
-      className="soft-tag"
-      style={{
-        color: riskColor(level),
-        background: `${riskColor(level)}18`,
-      }}
-    >
-      {level ?? 'unknown'}
     </Tag>
   );
 }

@@ -23,6 +23,11 @@ backend/.env
 *.sqlite3
 *.log
 
+# 数据库备份产物：含真实评测数据，不要提交
+*.dump
+*.sql
+backend/backups/
+
 # HarmBench 等数据集转换产物，可由 backend/scripts/convert_harmbench.py 重新生成
 benchmark_datasets/
 

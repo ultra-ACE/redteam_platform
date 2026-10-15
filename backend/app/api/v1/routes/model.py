@@ -7,6 +7,7 @@ from app.schemas import (
     HealthCheckData,
     Model,
     ModelCreateRequest,
+    ModelUpdateRequest,
     PaginatedData,
 )
 from app.services import ModelService, UnitOfWork
@@ -45,6 +46,23 @@ async def create_model(
 ) -> dict:
     service = ModelService(uow)
     model = service.create_model(payload)
+    return ok(Model.model_validate(model).model_dump())
+
+
+@router.patch(
+    "/models/{model_id}",
+    response_model=ApiResponse[Model],
+    operation_id="updateModel",
+)
+async def update_model(
+    model_id: int,
+    payload: ModelUpdateRequest,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    model = ModelService(uow).update_model(model_id, payload)
+    if model is None:
+        raise HTTPException(status_code=404, detail="model not found")
     return ok(Model.model_validate(model).model_dump())
 
 

@@ -9,6 +9,7 @@ from app.api.utils import get_operator, ok, require_local_token
 from app.db.session import SessionLocal
 from app.schemas import (
     ApiResponse,
+    AttemptDetail,
     EvaluationResult,
     EvaluationTask,
     EvaluationTaskCreateRequest,
@@ -99,11 +100,9 @@ async def list_evaluation_results(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
     sort: str | None = None,
-    risk_level: str | None = None,
     needs_review: bool | None = None,
     model_id: int | None = None,
     attack_template_id: int | None = None,
-    risk_category_code: str | None = None,
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
@@ -112,13 +111,29 @@ async def list_evaluation_results(
         task_id=task_id,
         page=page,
         page_size=page_size,
-        risk_level=risk_level,
         needs_review=needs_review,
         model_id=model_id,
         attack_template_id=attack_template_id,
-        risk_category_code=risk_category_code,
     )
     return ok(result.model_dump())
+
+
+@router.get(
+    "/task-attempts/{attempt_id}",
+    response_model=ApiResponse[AttemptDetail],
+    operation_id="getTaskAttemptDetail",
+    tags=["评测任务"],
+)
+async def get_task_attempt_detail(
+    attempt_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    """返回单次尝试的完整证据链：提示词、模型输出、Judge 详情、规则命中、六维风险与复核状态。"""
+    detail = EvaluationResultService(uow).get_attempt_detail(attempt_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="task attempt not found")
+    return ok(detail.model_dump())
 
 
 @router.post(
@@ -143,6 +158,43 @@ async def start_evaluation_task(
 
 
 @router.post(
+    "/evaluation-tasks/{task_id}/actions/pause",
+    response_model=ApiResponse[TaskActionData],
+    operation_id="pauseEvaluationTask",
+    tags=["评测任务"],
+)
+async def pause_evaluation_task(
+    task_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    task = TaskService(uow).pause_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="task not found")
+    uow.commit()
+    return ok(TaskActionData(task_id=task.id, status=task.status, pause_requested=task.pause_requested).model_dump())
+
+
+@router.post(
+    "/evaluation-tasks/{task_id}/actions/resume",
+    response_model=ApiResponse[TaskActionData],
+    operation_id="resumeEvaluationTask",
+    tags=["评测任务"],
+)
+async def resume_evaluation_task(
+    task_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    task = TaskService(uow).resume_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="task not found")
+    uow.commit()
+    enqueue_task(task.id)
+    return ok(TaskActionData(task_id=task.id, status=task.status, pause_requested=task.pause_requested).model_dump())
+
+
+@router.post(
     "/evaluation-tasks/{task_id}/actions/cancel",
     response_model=ApiResponse[TaskActionData],
     operation_id="cancelEvaluationTask",
@@ -157,7 +209,14 @@ async def cancel_evaluation_task(
     task = service.cancel_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
-    return ok(TaskActionData(task_id=task.id, status=task.status, cancel_requested=task.cancel_requested).model_dump())
+    return ok(
+        TaskActionData(
+            task_id=task.id,
+            status=task.status,
+            cancel_requested=task.cancel_requested,
+            pause_requested=task.pause_requested,
+        ).model_dump()
+    )
 
 
 @router.post(

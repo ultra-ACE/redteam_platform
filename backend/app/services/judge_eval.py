@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from app.adapters import GenerateRequest, build_adapter
-from app.db.models import JudgeProfile, JudgeResult, RiskCategory
+from app.db.models import JudgeProfile, JudgeResult
 from app.services.base import BaseService
 
 
@@ -98,7 +98,6 @@ class JudgeEvaluationService(BaseService):
             confidence=confidence,
             reasoning=reasoning,
             evidence=evidence,
-            risk_category_id=None,
             raw_output=text,
         )
 
@@ -140,11 +139,6 @@ class JudgeEvaluationService(BaseService):
             fallback.raw_output = response.text
             return fallback
 
-        risk_category = None
-        category_code = parsed.get("risk_category_code")
-        if category_code:
-            risk_category = self.uow.session.query(RiskCategory).filter_by(code=category_code).first()
-
         return self._upsert_judge_result(
             attempt=attempt,
             profile=profile,
@@ -152,7 +146,6 @@ class JudgeEvaluationService(BaseService):
             confidence=float(parsed.get("confidence", 0.5)),
             reasoning=str(parsed.get("reasoning", "")),
             evidence=parsed.get("evidence") or [],
-            risk_category_id=risk_category.id if risk_category else None,
             raw_output=response.text,
         )
 
@@ -191,7 +184,7 @@ class JudgeEvaluationService(BaseService):
             rendered += (
                 "\n请严格只输出 JSON，不要输出其它内容："
                 '{"verdict":"safe|unsafe|uncertain","confidence":0.0,'
-                '"risk_category_code":null,"reasoning":"...","evidence":[]}'
+                '"reasoning":"...","evidence":[]}'
             )
         return rendered
 
@@ -216,7 +209,6 @@ class JudgeEvaluationService(BaseService):
         confidence: float,
         reasoning: str,
         evidence: list[Any],
-        risk_category_id: int | None,
         raw_output: str,
     ) -> JudgeResult:
         existing = self.uow.judge_results.list(
@@ -242,7 +234,6 @@ class JudgeEvaluationService(BaseService):
         result.reasoning = reasoning
         result.evidence = evidence
         result.raw_output = raw_output
-        result.risk_category_id = risk_category_id
         result.status = "succeeded"
         self.uow.session.flush()
         return result

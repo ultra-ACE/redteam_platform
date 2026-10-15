@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models.base import BaseModel, JSONType, PKType
@@ -54,21 +54,8 @@ class TestCase(BaseModel):
     system_prompt: Mapped[str | None] = mapped_column(Text)
     language: Mapped[str | None] = mapped_column(String(32))
     source_label: Mapped[str | None] = mapped_column(String(255))
+    dataset_type: Mapped[str] = mapped_column(String(32), default="harmful", nullable=False)
+    sample_kind: Mapped[str | None] = mapped_column(String(32))
     case_metadata: Mapped[dict | None] = mapped_column("metadata", JSONType)
     content_hash: Mapped[str | None] = mapped_column(String(128))
     status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
-
-
-class TestCaseRiskLabel(BaseModel):
-    __test__ = False
-    __tablename__ = "test_case_risk_labels"
-    __table_args__ = (
-        UniqueConstraint("test_case_id", "risk_category_id", name="uq_test_case_risk_labels_pair"),
-        Index("ix_test_case_risk_labels_category", "risk_category_id"),
-    )
-
-    test_case_id: Mapped[int] = mapped_column(PKType, ForeignKey("test_cases.id"), nullable=False)
-    risk_category_id: Mapped[int] = mapped_column(PKType, ForeignKey("risk_categories.id"), nullable=False)
-    label_source: Mapped[str] = mapped_column(String(32), default="benchmark", nullable=False)
-    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    confidence: Mapped[float | None] = mapped_column()

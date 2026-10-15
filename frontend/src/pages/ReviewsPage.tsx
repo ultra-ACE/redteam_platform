@@ -1,37 +1,20 @@
 import { useState } from 'react';
-import { CheckCircleOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Select, Space, Table, Tabs, Tag, message } from 'antd';
+import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Table, Tabs, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createManualReview, getManualReview, listManualReviews, listRiskCategories, listRiskTaxonomies } from '../api';
+import { createManualReview, getManualReview, listManualReviews } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
-import type { ManualReview, ManualReviewDetail, RiskCategory } from '../types/api';
-import { formatDateTime, formatPercent, formatScore } from '../utils/format';
-
-function flattenCategories(nodes: RiskCategory[], prefix = ''): Array<{ label: string; value: number }> {
-  const options: Array<{ label: string; value: number }> = [];
-  for (const node of nodes) {
-    options.push({ label: `${prefix}${node.code} · ${node.name}`, value: node.risk_category_id });
-    if (node.children?.length) options.push(...flattenCategories(node.children, `${prefix}— `));
-  }
-  return options;
-}
+import type { ManualReview, ManualReviewDetail } from '../types/api';
+import { formatDateTime, formatPercent, shortenId } from '../utils/format';
 
 export function ReviewsPage() {
   const queryClient = useQueryClient();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<ManualReviewDetail | null>(null);
+  const [keyword, setKeyword] = useState('');
   const [form] = Form.useForm();
 
   const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 200 }) });
-  const categoriesQuery = useQuery({
-    queryKey: ['manual-review-category-options'],
-    queryFn: async () => {
-      const taxonomies = await listRiskTaxonomies({ page_size: 200 });
-      const nested = await Promise.all(taxonomies.items.map((item) => listRiskCategories(item.risk_taxonomy_id)));
-      return nested.flat().flatMap((item) => flattenCategories([item]));
-    },
-  });
-
   const detailMutation = useMutation({
     mutationFn: getManualReview,
     onSuccess: (data) => {
@@ -39,8 +22,7 @@ export function ReviewsPage() {
       setDetailOpen(true);
       form.setFieldsValue({
         decision: 'confirmed',
-        corrected_category_id: data.corrected_category_id,
-        corrected_score: data.corrected_score,
+        corrected_verdict: data.corrected_verdict,
         comment: data.comment,
       });
     },
@@ -53,8 +35,7 @@ export function ReviewsPage() {
         task_attempt_id: detail!.task_attempt_id,
         trigger_reason: detail!.trigger_reason,
         decision: values.decision,
-        corrected_category_id: values.corrected_category_id ?? null,
-        corrected_score: values.corrected_score ?? null,
+        corrected_verdict: values.corrected_verdict ?? null,
         comment: values.comment,
       }),
     onSuccess: () => {
@@ -68,10 +49,20 @@ export function ReviewsPage() {
   });
 
   const reviews = reviewsQuery.data?.items ?? [];
-  const pendingReviews = reviews.filter((item) => item.status === 'pending' || item.status === 'in_review');
-  const historyReviews = reviews.filter((item) => item.status === 'resolved' || item.status === 'rejected');
-  const categoryOptions = categoriesQuery.data ?? [];
-
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const matchedReviews = normalizedKeyword
+    ? reviews.filter((item) =>
+        [
+          String(item.review_id),
+          String(item.task_attempt_id),
+          item.trigger_reason,
+          item.status,
+          item.reviewer,
+        ].some((value) => (value ?? '').toLowerCase().includes(normalizedKeyword)),
+      )
+    : reviews;
+  const pendingReviews = matchedReviews.filter((item) => item.status === 'pending' || item.status === 'in_review');
+  const historyReviews = matchedReviews.filter((item) => item.status === 'resolved' || item.status === 'rejected');
   const renderTable = (data: ManualReview[], showDecision = false) => (
     <Table<ManualReview>
       rowKey="review_id"
@@ -86,7 +77,7 @@ export function ReviewsPage() {
         ...(showDecision
           ? [
               { title: '复核结论', dataIndex: 'decision', width: 120 },
-              { title: '修正分', dataIndex: 'corrected_score', width: 100, render: formatScore },
+              { title: '修正判定', dataIndex: 'corrected_verdict', width: 110 },
               { title: '复核人', dataIndex: 'reviewer', width: 120 },
               { title: '复核时间', dataIndex: 'reviewed_at', width: 180, render: formatDateTime },
             ]
@@ -108,8 +99,22 @@ export function ReviewsPage() {
     <div className="page-stack">
       <PageHeader
         title="人工复核"
-        description="处理低可信度、规则冲突、边界分数和多 Judge 分歧结果，并修正风险类别与风险分。"
-        extra={<Button icon={<ReloadOutlined />} onClick={() => reviewsQuery.refetch()}>刷新</Button>}
+        description="处理低可信度、规则冲突和多 Judge 分歧结果，并修正 Judge 判定。"
+        extra={
+          <Space>
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder="按复核 ID / 尝试 ID / 触发原因搜索"
+              style={{ width: 320 }}
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => reviewsQuery.refetch()}>
+              刷新
+            </Button>
+          </Space>
+        }
       />
 
       <Tabs
@@ -141,19 +146,19 @@ export function ReviewsPage() {
               type="warning"
               showIcon
               message={`触发原因：${detail.trigger_reason}`}
-              description="请结合模型输出、Judge 判断、规则命中和风险量化结果给出复核结论。"
+              description="请结合模型输出、Judge 判断和规则命中给出复核结论。"
             />
             <Descriptions column={2} size="small" bordered>
               <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
               <Descriptions.Item label="尝试 ID">{detail.task_attempt_id}</Descriptions.Item>
-              <Descriptions.Item label="用例 ID">{detail.external_id ?? detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="用例编号">{detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="来源编号">
+                <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
+              </Descriptions.Item>
               <Descriptions.Item label="Judge 判断">
                 {detail.judge_verdict ?? '-'} / 置信度 {formatPercent(detail.judge_confidence)} / 可信度 {formatPercent(detail.judge_trust_score)}
               </Descriptions.Item>
               <Descriptions.Item label="规则命中">{detail.rule_hits}，最高严重度 {detail.rule_highest_severity ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="原始风险">
-                {formatScore(detail.original_risk_score)} / {detail.original_risk_level ?? '-'}
-              </Descriptions.Item>
             </Descriptions>
 
             <Card size="small" title="测试 Prompt">
@@ -174,11 +179,15 @@ export function ReviewsPage() {
                   ]}
                 />
               </Form.Item>
-              <Form.Item name="corrected_category_id" label="修正风险类别">
-                <Select allowClear showSearch options={categoryOptions} placeholder="选择统一风险类别" />
-              </Form.Item>
-              <Form.Item name="corrected_score" label="修正风险分" rules={[{ required: true, message: '修正风险分必填' }]}>
-                <InputNumber min={0} max={100} style={{ width: '100%' }} />
+              <Form.Item name="corrected_verdict" label="修正 Judge 判定">
+                <Select
+                  allowClear
+                  options={[
+                    { value: 'safe', label: 'safe' },
+                    { value: 'unsafe', label: 'unsafe' },
+                    { value: 'uncertain', label: 'uncertain' },
+                  ]}
+                />
               </Form.Item>
               <Form.Item name="comment" label="复核意见">
                 <Input.TextArea rows={4} placeholder="说明复核依据和修正原因" />

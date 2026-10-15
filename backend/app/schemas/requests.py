@@ -3,6 +3,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .enums import (
+    AttackMethodCode,
     JudgeType,
     ModelAdapter,
     ModelUsageScope,
@@ -11,51 +12,12 @@ from .enums import (
 )
 
 
-class SystemConfigUpdate(BaseModel):
-    config_value: Any
-
-
-class RiskMapping(BaseModel):
-    raw_label: str
-    risk_category_id: int
-    mapping_type: str = "alias"
-    confidence: float = Field(default=1.0, ge=0, le=1)
-    mapping_note: str | None = None
-
-
-class RiskMappingBatchRequest(BaseModel):
-    mappings: list[RiskMapping]
-
-
-class RiskMappingBatchResult(BaseModel):
-    created_count: int = 0
-    updated_count: int = 0
-    remaining_unresolved_count: int = 0
-
-
-class RiskMappingItem(BaseModel):
-    raw_label: str
-    count: int = 0
-    mapped_category_id: int | None = None
-    mapped_category_code: str | None = None
-    mapped_category_name: str | None = None
-    status: str = "unmapped"
-
-
-class RiskMappingStatus(BaseModel):
-    benchmark_version_id: int
-    total_labels: int = 0
-    mapped_labels: int = 0
-    mapping_rate: float = 0.0
-    unresolved_labels: list[str] = Field(default_factory=list)
-    items: list[RiskMappingItem] = Field(default_factory=list)
-
-
 class TestCaseUpdateRequest(BaseModel):
     prompt: str | None = None
     system_prompt: str | None = None
     language: str | None = None
-    risk_category_ids: list[int] | None = None
+    dataset_type: str | None = None
+    sample_kind: str | None = None
     status: str | None = None
 
 
@@ -71,25 +33,20 @@ class ModelCreateRequest(BaseModel):
     enabled: bool = True
 
 
-class AttackMethodCreateRequest(BaseModel):
-    code: str
-    name: str
-    category: str | None = None
-    description: str | None = None
-    risk_notes: str | None = None
-    enabled: bool = True
-
-
-class AttackMethodUpdateRequest(BaseModel):
+class ModelUpdateRequest(BaseModel):
     name: str | None = None
-    category: str | None = None
-    description: str | None = None
-    risk_notes: str | None = None
+    provider: str | None = None
+    adapter_type: ModelAdapter | None = None
+    base_url: str | None = None
+    model_name: str | None = None
+    secret_ref: str | None = None
+    default_params: dict[str, Any] | None = None
+    usage_scope: ModelUsageScope | None = None
     enabled: bool | None = None
 
 
 class AttackTemplateCreateRequest(BaseModel):
-    attack_method_id: int
+    method_code: AttackMethodCode
     name: str
     template_text: str
     variables: list[str] = Field(default_factory=list)
@@ -139,20 +96,6 @@ class ExecutionConfig(BaseModel):
     concurrency: int = Field(default=4, ge=1)
 
 
-class ScoringWeights(BaseModel):
-    harm_severity: float = Field(default=0.30, ge=0, le=1)
-    attack_success: float = Field(default=0.25, ge=0, le=1)
-    intent_compliance: float = Field(default=0.20, ge=0, le=1)
-    rule_violation_severity: float = Field(default=0.15, ge=0, le=1)
-    multi_run_consistency: float = Field(default=0.05, ge=0, le=1)
-    cross_template_consistency: float = Field(default=0.05, ge=0, le=1)
-
-
-class ScoringConfig(BaseModel):
-    score_version: str = "risk-v1"
-    weights: ScoringWeights = Field(default_factory=ScoringWeights)
-
-
 class ModelBinding(BaseModel):
     model_id: int
     role: str = "target"
@@ -163,13 +106,11 @@ class ModelBinding(BaseModel):
 class EvaluationTaskCreateRequest(BaseModel):
     name: str
     benchmark_version_id: int
-    risk_taxonomy_id: int
     model_bindings: list[ModelBinding]
     attack_template_ids: list[int] = Field(default_factory=list)
     judge_profile_ids: list[int]
     rule_set_ids: list[int]
     execution: ExecutionConfig
-    scoring: ScoringConfig
     priority: str = "normal"
 
 
@@ -204,16 +145,21 @@ class ManualReviewCreateRequest(BaseModel):
     task_attempt_id: int
     trigger_reason: str
     decision: ReviewDecision
-    corrected_category_id: int | None = None
-    corrected_score: float | None = Field(default=None, ge=0, le=100)
+    corrected_verdict: str | None = None
     comment: str | None = None
+
+
+class ManualReviewUpdateRequest(BaseModel):
+    decision: ReviewDecision
+    corrected_verdict: str | None = None
+    comment: str | None = None
+    status: str | None = None
 
 
 class ReportCreateRequest(BaseModel):
     task_id: int
-    report_type: str
-    format: ReportFormat
-    template_version_id: int | None = None
+    report_type: str = "full"
+    format: ReportFormat = ReportFormat.html
     include: list[str] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
 
@@ -222,48 +168,10 @@ class TaskActionData(BaseModel):
     task_id: int
     status: str
     cancel_requested: bool | None = None
+    pause_requested: bool | None = None
 
 
 class RetryFailedData(BaseModel):
     task_id: int
     retry_count: int
     status: str
-
-
-class ReportTemplateCreateRequest(BaseModel):
-    code: str
-    name: str
-    description: str | None = None
-
-
-class ReportTemplateVersionCreateRequest(BaseModel):
-    version: str
-    format: ReportFormat
-    content: str
-    variables_schema: dict[str, Any] = Field(default_factory=dict)
-    status: str = "draft"
-
-
-class RiskTaxonomyCreateRequest(BaseModel):
-    name: str
-    version: str
-    description: str | None = None
-    is_default: bool = False
-
-
-class RiskCategoryCreateRequest(BaseModel):
-    code: str
-    name: str
-    parent_id: int | None = None
-    definition: str | None = None
-    severity_weight: int = Field(default=0, ge=0, le=100)
-    examples: dict[str, Any] = Field(default_factory=dict)
-    sort_order: int = 0
-
-
-class ManualReviewUpdateRequest(BaseModel):
-    decision: ReviewDecision
-    corrected_category_id: int | None = None
-    corrected_score: float | None = Field(default=None, ge=0, le=100)
-    comment: str | None = None
-    status: str | None = None

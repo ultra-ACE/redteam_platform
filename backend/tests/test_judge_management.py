@@ -57,7 +57,6 @@ def test_judge_profile_crud_and_trust_summary() -> None:
         task = EvaluationTask(
             name="judge-task",
             benchmark_version_id=version.id,
-            risk_taxonomy_id=1,
             status="succeeded",
             total_cases=1,
             completed_cases=1,

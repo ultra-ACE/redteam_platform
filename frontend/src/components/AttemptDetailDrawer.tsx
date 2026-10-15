@@ -1,0 +1,173 @@
+import { Alert, Card, Descriptions, Drawer, Flex, Space, Spin, Table, Tag, Typography } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { getTaskAttemptDetail } from '../api';
+import type { RuleValidationDetail } from '../types/api';
+import { JudgeVerdictTag } from './ui';
+import { formatDateTime, formatPercent, shortenId } from '../utils/format';
+
+const { Text } = Typography;
+
+const TRUST_LABELS: Record<string, string> = {
+  rule_consistency: '规则一致性',
+  ensemble_agreement: '多 Judge 一致度',
+  evidence_completeness: '证据完整度',
+  calibration_score: '校准得分',
+};
+
+export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: () => void }) {
+  const { attemptId, onClose } = props;
+  const query = useQuery({
+    queryKey: ['attempt-detail', attemptId],
+    queryFn: () => getTaskAttemptDetail(attemptId as number),
+    enabled: Boolean(attemptId),
+  });
+  const detail = query.data;
+
+  return (
+    <Drawer
+      title={`尝试详情 · #${attemptId ?? ''}`}
+      placement="right"
+      width={880}
+      open={Boolean(attemptId)}
+      onClose={onClose}
+      destroyOnClose
+    >
+      {query.isLoading ? (
+        <Flex justify="center" style={{ padding: 60 }}>
+          <Spin />
+        </Flex>
+      ) : query.isError ? (
+        <Alert type="error" showIcon message="加载失败" description={(query.error as Error).message} />
+      ) : detail ? (
+        <Space direction="vertical" size={18} style={{ width: '100%' }}>
+          {detail.error_message ? (
+            <Alert
+              type="error"
+              showIcon
+              message={`执行错误：${detail.error_code ?? 'unknown'}`}
+              description={detail.error_message}
+            />
+          ) : null}
+
+          <Descriptions column={2} size="small" bordered>
+            <Descriptions.Item label="来源编号">
+              <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="数据集类型">{detail.dataset_type ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="样本类型">{detail.sample_kind ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="被测模型">{detail.model_name ?? `模型 #${detail.model_id}`}</Descriptions.Item>
+            <Descriptions.Item label="攻击模板">
+              {detail.attack_template_name ?? (detail.attack_template_id ? `模板 #${detail.attack_template_id}` : '未使用')}
+            </Descriptions.Item>
+            <Descriptions.Item label="执行状态"><Tag>{detail.status}</Tag></Descriptions.Item>
+            <Descriptions.Item label="耗时">
+              {detail.latency_ms === null || detail.latency_ms === undefined ? '-' : `${detail.latency_ms} ms`}
+            </Descriptions.Item>
+            <Descriptions.Item label="开始时间">{formatDateTime(detail.started_at)}</Descriptions.Item>
+            <Descriptions.Item label="结束时间">{formatDateTime(detail.finished_at)}</Descriptions.Item>
+          </Descriptions>
+
+          <Card size="small" title="测试 Prompt">
+            <pre className="code-block">{detail.prompt ?? '-'}</pre>
+          </Card>
+
+          <Card size="small" title="模型输出">
+            <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
+              {detail.model_output ?? '-'}
+            </pre>
+          </Card>
+
+          <Card
+            size="small"
+            title="Judge 判断与可信度"
+            extra={detail.judge ? <JudgeVerdictTag verdict={detail.judge.verdict} /> : null}
+          >
+            {detail.judge ? (
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Descriptions column={2} size="small">
+                  <Descriptions.Item label="Judge">
+                    {detail.judge.judge_profile_name ?? `#${detail.judge.judge_profile_id}`}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="类型 / 策略">
+                    {detail.judge.judge_type ?? '-'} / {detail.judge.strategy ?? '-'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="置信度">{formatPercent(detail.judge.confidence)}</Descriptions.Item>
+                  <Descriptions.Item label="可信度">{formatPercent(detail.judge.trust_score)}</Descriptions.Item>
+                </Descriptions>
+
+                {detail.judge.trust_breakdown ? (
+                  <Table
+                    size="small"
+                    rowKey="key"
+                    pagination={false}
+                    dataSource={Object.entries(detail.judge.trust_breakdown).map(([key, value]) => ({
+                      key,
+                      label: TRUST_LABELS[key] ?? key,
+                      value: Number(value),
+                    }))}
+                    columns={[
+                      { title: '可信度维度', dataIndex: 'label' },
+                      { title: '得分', dataIndex: 'value', width: 120, render: formatPercent },
+                    ]}
+                  />
+                ) : null}
+
+                {detail.judge.reasoning ? (
+                  <div>
+                    <Text type="secondary">Judge 说明</Text>
+                    <pre className="code-block" style={{ maxHeight: 200, overflow: 'auto', marginTop: 6 }}>
+                      {detail.judge.reasoning}
+                    </pre>
+                  </div>
+                ) : null}
+              </Space>
+            ) : (
+              <Text type="secondary">该尝试暂无 Judge 结果。</Text>
+            )}
+          </Card>
+
+          <Card size="small" title="规则校验命中">
+            <Table<RuleValidationDetail>
+              size="small"
+              rowKey="rule_definition_id"
+              pagination={false}
+              dataSource={detail.rule_validations}
+              locale={{ emptyText: '该尝试暂无规则校验结果' }}
+              columns={[
+                {
+                  title: '规则',
+                  dataIndex: 'rule_code',
+                  render: (value, record) => value ?? `#${record.rule_definition_id}`,
+                },
+                {
+                  title: '结果',
+                  dataIndex: 'passed',
+                  width: 110,
+                  render: (passed: boolean) => <Tag color={passed ? 'success' : 'error'}>{passed ? '通过' : '命中'}</Tag>,
+                },
+                { title: '严重度', dataIndex: 'severity', width: 110, render: (value) => value ?? '-' },
+                { title: '命中次数', dataIndex: 'hit_count', width: 110 },
+              ]}
+            />
+          </Card>
+
+          <Card size="small" title="人工复核">
+            {detail.manual_review ? (
+              <Descriptions column={2} size="small">
+                <Descriptions.Item label="复核 ID">#{detail.manual_review.review_id}</Descriptions.Item>
+                <Descriptions.Item label="触发原因">{detail.manual_review.trigger_reason}</Descriptions.Item>
+                <Descriptions.Item label="状态">{detail.manual_review.status}</Descriptions.Item>
+                <Descriptions.Item label="结论">{detail.manual_review.decision ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label="修正判定">{detail.manual_review.corrected_verdict ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label="复核人">{detail.manual_review.reviewer ?? '-'}</Descriptions.Item>
+              </Descriptions>
+            ) : (
+              <Text type="secondary">该尝试未触发人工复核。</Text>
+            )}
+          </Card>
+        </Space>
+      ) : null}
+    </Drawer>
+  );
+}

@@ -154,7 +154,6 @@ export function TasksPage() {
           form={form}
           layout="vertical"
           initialValues={{
-            risk_taxonomy_id: 1,
             model_ids: [],
             repeat: 1,
             timeout_seconds: 120,
@@ -164,7 +163,6 @@ export function TasksPage() {
             createMutation.mutate({
               name: values.name,
               benchmark_version_id: values.benchmark_version_id,
-              risk_taxonomy_id: values.risk_taxonomy_id,
               model_bindings: (values.model_ids ?? []).map((modelId: number) => ({
                 model_id: modelId,
                 role: 'target',
@@ -181,17 +179,6 @@ export function TasksPage() {
                 timeout_seconds: values.timeout_seconds,
                 retry: { max_attempts: 1, backoff_seconds: 3 },
                 concurrency: values.concurrency,
-              },
-              scoring: {
-                score_version: 'risk-v1',
-                weights: {
-                  harm_severity: 0.3,
-                  attack_success: 0.25,
-                  intent_compliance: 0.2,
-                  rule_violation_severity: 0.15,
-                  multi_run_consistency: 0.05,
-                  cross_template_consistency: 0.05,
-                },
               },
             });
           }}
@@ -262,9 +249,6 @@ export function TasksPage() {
                 label: `${item.name} · ${item.judge_type}`,
               }))}
             />
-          </Form.Item>
-          <Form.Item name="risk_taxonomy_id" label="风险体系 ID" rules={[{ required: true }]}>
-            <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
           <Space size={16} style={{ display: 'flex' }}>
             <Form.Item name="repeat" label="重复次数" style={{ flex: 1 }}>

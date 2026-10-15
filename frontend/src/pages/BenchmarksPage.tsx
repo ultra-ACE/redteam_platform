@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { DeleteOutlined, InboxOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, InboxOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -7,11 +7,11 @@ import {
   Col,
   Form,
   Input,
-  InputNumber,
   List,
   Modal,
   Popconfirm,
   Row,
+  Select,
   Space,
   Table,
   Tag,
@@ -24,6 +24,7 @@ import {
   deleteBenchmark,
   deleteBenchmarkVersion,
   importBenchmark,
+  listBenchmarkAdapters,
   listBenchmarks,
   listBenchmarkVersions,
   listTestCases,
@@ -45,6 +46,7 @@ export function BenchmarksPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importResults, setImportResults] = useState<Array<BenchmarkImportResult & { file_name: string }>>([]);
+  const [testCaseKeyword, setTestCaseKeyword] = useState('');
   const [form] = Form.useForm();
 
   const benchmarksQuery = useQuery({ queryKey: ['benchmarks'], queryFn: () => listBenchmarks({ page_size: 200 }) });
@@ -57,6 +59,11 @@ export function BenchmarksPage() {
     queryKey: ['test-cases', selectedVersion?.benchmark_version_id],
     queryFn: () => listTestCases({ benchmark_version_id: selectedVersion!.benchmark_version_id, page_size: 200 }),
     enabled: Boolean(selectedVersion?.benchmark_version_id),
+  });
+  const adaptersQuery = useQuery({
+    queryKey: ['benchmark-adapters'],
+    queryFn: listBenchmarkAdapters,
+    staleTime: 5 * 60 * 1000,
   });
 
   const importMutation = useMutation({
@@ -73,7 +80,6 @@ export function BenchmarksPage() {
             benchmark_version_id: 0,
             imported_count: 0,
             failed_count: 1,
-            unresolved_labels: [],
             errors: [{ row_number: 0, message: text }],
             file_name: payload.file_name,
           });
@@ -115,7 +121,7 @@ export function BenchmarksPage() {
     mutationFn: deleteBenchmarkVersion,
     onSuccess: (summary) => {
       message.success(
-        `已删除 ${summary.deleted_test_cases} 条测试用例、${summary.deleted_mappings} 条风险映射`,
+        `已删除 ${summary.deleted_test_cases} 条测试用例`,
       );
       setSelectedVersion(null);
       queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
@@ -130,6 +136,17 @@ export function BenchmarksPage() {
   const testCases = testCasesQuery.data?.items ?? [];
 
   const selectedBenchmarkName = useMemo(() => selectedBenchmark?.name ?? '未选择 Benchmark', [selectedBenchmark]);
+
+  /** 用例表格的本地筛选：支持按来源编号、提示词正文、原始标签和数字 ID 查找。 */
+  const filteredTestCases = useMemo(() => {
+    const normalized = testCaseKeyword.trim().toLowerCase();
+    if (!normalized) return testCases;
+    return testCases.filter((item) =>
+      [item.external_id, item.prompt, item.source_label, String(item.test_case_id)].some((value) =>
+        (value ?? '').toLowerCase().includes(normalized),
+      ),
+    );
+  }, [testCaseKeyword, testCases]);
 
   const resetImport = () => {
     setImportResults([]);
@@ -158,8 +175,9 @@ export function BenchmarksPage() {
           formData.append('name', benchmarkName);
           // 单文件使用表单里的版本号；多文件按文件名自动生成版本号
           formData.append('version', files.length === 1 ? values.version : fileVersionName(file.name));
-          if (values.risk_taxonomy_id) {
-            formData.append('risk_taxonomy_id', String(values.risk_taxonomy_id));
+          // 留空则由后端按表头签名自动识别数据集结构
+          if (values.source_type) {
+            formData.append('source_type', String(values.source_type));
           }
           formData.append('file', file);
           return { formData, file_name: file.name };
@@ -173,7 +191,7 @@ export function BenchmarksPage() {
     <div className="page-stack">
       <PageHeader
         title="Benchmark 管理"
-        description="导入 JSONL、JSON、CSV 数据集，自动写入 Benchmark 版本、测试用例和风险映射。"
+        description="支持 HarmBench、AdvBench、TDC2023、中文数据集的原始文件直接导入，自动识别数据集结构并保留原始标签。"
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => benchmarksQuery.refetch()}>
@@ -300,28 +318,42 @@ export function BenchmarksPage() {
       </Row>
 
       {selectedVersion ? (
-        <Card className="section-card" title={`测试用例 · 版本 ${selectedVersion.version}`} extra={<Tag color="blue">{testCases.length} 条</Tag>}>
+        <Card
+          className="section-card"
+          title={`测试用例 · 版本 ${selectedVersion.version}`}
+          extra={
+            <Space>
+              <Input
+                allowClear
+                prefix={<SearchOutlined />}
+              placeholder="按来源编号 / 提示词 / 标签搜索"
+                style={{ width: 280 }}
+                value={testCaseKeyword}
+                onChange={(event) => setTestCaseKeyword(event.target.value)}
+              />
+              <Tag color="blue">
+                {filteredTestCases.length} / {testCases.length} 条
+              </Tag>
+            </Space>
+          }
+        >
           <Table
             rowKey="test_case_id"
             loading={testCasesQuery.isLoading}
-            dataSource={testCases}
-            pagination={{ pageSize: 10 }}
+            dataSource={filteredTestCases}
+            pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10', '20', '50', '100'] }}
             columns={[
               { title: 'ID', dataIndex: 'test_case_id', width: 80 },
-              { title: '外部 ID', dataIndex: 'external_id', width: 140 },
-              { title: 'Prompt', dataIndex: 'prompt', ellipsis: true },
-              { title: '原始标签', dataIndex: 'source_label', width: 140 },
               {
-                title: '风险类别',
-                width: 180,
-                render: (_, record) => (
-                  <Space wrap>
-                    {(record.risk_categories ?? []).map((item) => (
-                      <Tag key={item.code} color="purple">{item.code}</Tag>
-                    ))}
-                  </Space>
-                ),
+                title: '来源编号',
+                dataIndex: 'external_id',
+                width: 200,
+                ellipsis: { showTitle: true },
               },
+              { title: 'Prompt', dataIndex: 'prompt', ellipsis: { showTitle: true } },
+              { title: '原始标签', dataIndex: 'source_label', width: 140 },
+              { title: '数据集类型', dataIndex: 'dataset_type', width: 120, render: (value) => <Tag color="blue">{value}</Tag> },
+              { title: '样本类型', dataIndex: 'sample_kind', width: 110, render: (value) => value ?? '-' },
               { title: '状态', dataIndex: 'status', width: 100, render: (value) => <Tag color="success">{value}</Tag> },
             ]}
           />
@@ -361,21 +393,30 @@ export function BenchmarksPage() {
               dataSource={importResults}
               columns={[
                 { title: '文件', dataIndex: 'file_name' },
+                {
+                  title: '识别格式',
+                  width: 210,
+                  render: (_, record) =>
+                    record.detected_adapter ? (
+                      <Space direction="vertical" size={0}>
+                        <Tag color="geekblue">{record.adapter_display_name ?? record.detected_adapter}</Tag>
+                        <span style={{ fontSize: 12, color: '#64748b' }}>
+                          {record.detected_adapter} · 置信度 {record.adapter_confidence ?? '-'}
+                        </span>
+                      </Space>
+                    ) : (
+                      '-'
+                    ),
+                },
                 { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 90 },
                 { title: '成功', dataIndex: 'imported_count', width: 80 },
                 { title: '失败', dataIndex: 'failed_count', width: 80 },
                 {
-                  title: '未映射标签',
+                  title: '数据集类型分布',
                   render: (_, record) =>
-                    record.unresolved_labels.length ? (
-                      <Space wrap>
-                        {record.unresolved_labels.map((label) => (
-                          <Tag key={label} color="warning">{label}</Tag>
-                        ))}
-                      </Space>
-                    ) : (
-                      <Tag color="success">无</Tag>
-                    ),
+                    Object.entries(record.dataset_type_counts ?? {}).map(([key, value]) => (
+                      <Tag key={key} color="blue">{key}: {value}</Tag>
+                    )),
                 },
               ]}
             />
@@ -396,7 +437,7 @@ export function BenchmarksPage() {
             ) : null}
           </Space>
         ) : (
-          <Form form={form} layout="vertical" initialValues={{ risk_taxonomy_id: 1 }}>
+          <Form form={form} layout="vertical">
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item name="name" label="Benchmark 名称" rules={[{ required: true }]}>
@@ -414,8 +455,19 @@ export function BenchmarksPage() {
                 </Form.Item>
               </Col>
             </Row>
-            <Form.Item name="risk_taxonomy_id" label="风险体系 ID">
-              <InputNumber min={1} style={{ width: '100%' }} />
+            <Form.Item
+              name="source_type"
+              label="数据集结构"
+              extra="默认自动识别。HarmBench、AdvBench、TDC2023 的原始 CSV 可直接导入，无需事先转换"
+            >
+              <Select
+                allowClear
+                placeholder="自动识别（按表头签名）"
+                options={(adaptersQuery.data ?? []).map((item) => ({
+                  value: item.name,
+                  label: `${item.display_name}（${item.name}）`,
+                }))}
+              />
             </Form.Item>
             <Form.Item label="数据集文件" required>
               <Dragger
@@ -428,7 +480,10 @@ export function BenchmarksPage() {
               >
                 <p className="ant-upload-drag-icon"><InboxOutlined /></p>
                 <p className="ant-upload-text">点击或拖拽数据集文件到此处（可多选）</p>
-                <p className="ant-upload-hint">支持 JSONL、JSON、CSV，可一次选择最多 10 个文件，每个文件导入为一个独立版本</p>
+                <p className="ant-upload-hint">
+                  支持 JSONL、JSON、CSV；HarmBench / AdvBench / TDC2023 原始 CSV 可直接导入，无需事先转换。
+                  可一次选择最多 10 个文件，每个文件导入为一个独立版本
+                </p>
               </Dragger>
             </Form.Item>
           </Form>

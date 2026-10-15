@@ -2,23 +2,26 @@ import { useState } from 'react';
 import { PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Input, Modal, Select, Space, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { checkModelHealth, createModel, listModels } from '../api';
+import { checkModelHealth, createModel, listModels, updateModel } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { ModelRecord } from '../types/api';
 import { formatDateTime } from '../utils/format';
 
 export function ModelsPage() {
   const [open, setOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ModelRecord | null>(null);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
   const modelsQuery = useQuery({ queryKey: ['models'], queryFn: () => listModels({ page_size: 200 }) });
 
   const createMutation = useMutation({
-    mutationFn: createModel,
+    mutationFn: (values: Record<string, unknown>) =>
+      editingModel ? updateModel(editingModel.model_id, values) : createModel(values),
     onSuccess: () => {
-      message.success('模型已创建');
+      message.success(editingModel ? '模型已更新' : '模型已创建');
       setOpen(false);
+      setEditingModel(null);
       form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['models'] });
     },
@@ -134,17 +137,29 @@ export function ModelsPage() {
             },
             {
               title: '操作',
-              width: 150,
+              width: 190,
               render: (_, record) => (
-                <Button
-                  type="link"
-                  icon={<ThunderboltOutlined />}
-                  loading={checkingModelId === record.model_id}
-                  disabled={checkingModelId !== null && checkingModelId !== record.model_id}
-                  onClick={() => runHealthCheck(record.model_id)}
-                >
-                  连接测试
-                </Button>
+                <Space>
+                  <Button
+                    type="link"
+                    onClick={() => {
+                      setEditingModel(record);
+                      setOpen(true);
+                      form.setFieldsValue(record);
+                    }}
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    type="link"
+                    icon={<ThunderboltOutlined />}
+                    loading={checkingModelId === record.model_id}
+                    disabled={checkingModelId !== null && checkingModelId !== record.model_id}
+                    onClick={() => runHealthCheck(record.model_id)}
+                  >
+                    连接测试
+                  </Button>
+                </Space>
               ),
             },
           ]}
@@ -152,9 +167,13 @@ export function ModelsPage() {
       )}
 
       <Modal
-        title="新建模型"
+        title={editingModel ? '编辑模型' : '新建模型'}
         open={open}
-        onCancel={() => setOpen(false)}
+        onCancel={() => {
+          setOpen(false);
+          setEditingModel(null);
+          form.resetFields();
+        }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
         destroyOnClose

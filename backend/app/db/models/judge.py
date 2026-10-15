@@ -30,7 +30,6 @@ class JudgeResult(BaseModel):
             name="uq_judge_results_attempt_profile_run",
         ),
         Index("ix_judge_results_status", "status"),
-        Index("ix_judge_results_risk_category", "risk_category_id"),
     )
 
     task_attempt_id: Mapped[int] = mapped_column(
@@ -41,9 +40,6 @@ class JudgeResult(BaseModel):
     )
     run_no: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     verdict: Mapped[str | None] = mapped_column(String(32))
-    risk_category_id: Mapped[int | None] = mapped_column(
-        PKType, ForeignKey("risk_categories.id")
-    )
     confidence: Mapped[float | None] = mapped_column(Float)
     reasoning: Mapped[str | None] = mapped_column(Text)
     evidence: Mapped[list | None] = mapped_column(JSONType)
@@ -77,7 +73,6 @@ class RuleDefinition(BaseModel):
     rule_type: Mapped[str] = mapped_column(String(64), nullable=False)
     definition: Mapped[dict | None] = mapped_column(JSONType)
     severity: Mapped[str] = mapped_column(String(32), nullable=False)
-    category_id: Mapped[int | None] = mapped_column(PKType, ForeignKey("risk_categories.id"))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 

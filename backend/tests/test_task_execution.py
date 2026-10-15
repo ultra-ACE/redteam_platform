@@ -64,7 +64,6 @@ def test_task_execution_with_multiple_mock_models() -> None:
         task = EvaluationTask(
             name="test-task",
             benchmark_version_id=version.id,
-            risk_taxonomy_id=1,
             status="queued",
             config={"attack_template_ids": []},
         )
@@ -144,7 +143,6 @@ def test_prepare_retry_failed_only_resets_failed_cases() -> None:
         task = EvaluationTask(
             name="retry-task",
             benchmark_version_id=version.id,
-            risk_taxonomy_id=1,
             status="queued",
             config={"attack_template_ids": []},
         )

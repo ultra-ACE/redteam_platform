@@ -18,9 +18,6 @@ class EvaluationTask(BaseModel):
     benchmark_version_id: Mapped[int] = mapped_column(
         PKType, ForeignKey("benchmark_versions.id"), nullable=False
     )
-    risk_taxonomy_id: Mapped[int] = mapped_column(
-        PKType, ForeignKey("risk_taxonomies.id"), nullable=False
-    )
     status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
     progress: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     total_cases: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -30,6 +27,8 @@ class EvaluationTask(BaseModel):
     priority: Mapped[str] = mapped_column(String(16), default="normal", nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    pause_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str | None] = mapped_column(String(128))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -65,6 +64,8 @@ class TaskCase(BaseModel):
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     case_config: Mapped[dict | None] = mapped_column(JSONType)
     retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    celery_task_id: Mapped[str | None] = mapped_column(String(255))
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TaskAttempt(BaseModel):
@@ -93,16 +94,6 @@ class TaskAttempt(BaseModel):
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(64))
     error_message: Mapped[str | None] = mapped_column(Text)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
-class TaskEvent(BaseModel):
-    __tablename__ = "task_events"
-    __table_args__ = (
-        Index("ix_task_events_task_id", "task_id", "id"),
-    )
-
-    task_id: Mapped[int] = mapped_column(PKType, ForeignKey("evaluation_tasks.id"), nullable=False)
-    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    payload: Mapped[dict | None] = mapped_column(JSONType)
