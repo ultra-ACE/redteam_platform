@@ -11,8 +11,17 @@ from app.db.models import (
 from app.services.base import BaseService
 
 
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class TaskExecutionService(BaseService):
     def expand_task(self, task_id: int) -> list[int]:
+        """把任务展开为 task_cases；返回所有用例 ID（含已存在的），但保留其原状态。
+
+        真正的入队由 ``dispatch_pending_task_cases`` 只挑 pending 的记录，所以
+        已成功/已失败的用例不会被重复执行。
+        """
         task = self.uow.evaluation_tasks.get(task_id)
         if task is None:
             return []
@@ -23,7 +32,7 @@ class TaskExecutionService(BaseService):
             task.error_message = "no enabled target model binding"
             task.total_cases = 0
             task.progress = 0.0
-            task.finished_at = datetime.now(timezone.utc)
+            task.finished_at = _now()
             self.uow.session.flush()
             return []
 
@@ -38,7 +47,7 @@ class TaskExecutionService(BaseService):
             task.error_message = "no active test cases"
             task.total_cases = 0
             task.progress = 0.0
-            task.finished_at = datetime.now(timezone.utc)
+            task.finished_at = _now()
             self.uow.session.flush()
             return []
 
@@ -64,18 +73,16 @@ class TaskExecutionService(BaseService):
                         task_case_ids.append(existing[0].id)
                         continue
 
-                    # Reuse the first model's legacy case created before multi-model keys existed.
-                    if binding.model_id == bindings[0].model_id:
-                        legacy_cases = self.uow.task_cases.list(
-                            page=1,
-                            page_size=1,
-                            task_id=task.id,
-                            case_key=legacy_key,
-                        )
-                        if legacy_cases and not (legacy_cases[0].case_config or {}).get("model_id"):
-                            self._set_case_model(legacy_cases[0], binding.model_id)
-                            task_case_ids.append(legacy_cases[0].id)
-                            continue
+                    legacy_cases = self.uow.task_cases.list(
+                        page=1,
+                        page_size=1,
+                        task_id=task.id,
+                        case_key=legacy_key,
+                    )
+                    if legacy_cases and not (legacy_cases[0].case_config or {}).get("model_id"):
+                        self._set_case_model(legacy_cases[0], binding.model_id)
+                        task_case_ids.append(legacy_cases[0].id)
+                        continue
 
                     task_case = TaskCase(
                         task_id=task.id,
@@ -89,22 +96,52 @@ class TaskExecutionService(BaseService):
                     task_case_ids.append(task_case.id)
 
         task.total_cases = len(task_case_ids)
-        task.progress = 0.0
-        task.status = "queued"
+        if task.status in {"draft", "queued"}:
+            task.progress = 0.0
         self.uow.session.flush()
         return task_case_ids
 
-    async def run_task_case(self, task_case_id: int) -> int | None:
+    def list_pending_case_ids(self, task_id: int) -> list[int]:
+        """只返回 pending 状态的用例 ID，用于 resume / recovery 重新入队。"""
+        rows = self.uow.task_cases.list(
+            page=1,
+            page_size=100000,
+            task_id=task_id,
+        )
+        return [row.id for row in rows if row.status == "pending"]
+
+    async def run_task_case(
+        self,
+        task_case_id: int,
+        celery_task_id: str | None = None,
+    ) -> int | None:
         task_case = self.uow.task_cases.get(task_case_id)
         if task_case is None:
             return None
         task = self.uow.evaluation_tasks.get(task_case.task_id)
         if task is None:
             return None
+
+        # 1) 取消优先级最高
         if task.cancel_requested:
             task_case.status = "cancelled"
             self.uow.session.flush()
             return None
+
+        # 2) 暂停：不派发新用例，保持 pending，等待 resume
+        if task.pause_requested:
+            if task_case.status not in {"succeeded", "failed", "cancelled"}:
+                task_case.status = "pending"
+            self.uow.session.flush()
+            return None
+
+        # 3) 已终止的用例绝不重跑
+        if task_case.status in {"succeeded", "cancelled"}:
+            return None
+
+        # 4) 保存 Celery task id 用于恢复时判断是否还有在跑的任务
+        if celery_task_id:
+            task_case.celery_task_id = celery_task_id
 
         test_case = self.uow.test_cases.get(task_case.test_case_id)
         if test_case is None:
@@ -122,6 +159,7 @@ class TaskExecutionService(BaseService):
 
         prompt = self._render_prompt(test_case, task_case)
         model_params = binding.model_params or {}
+        started_at = _now()
         attempt = TaskAttempt(
             task_case_id=task_case.id,
             model_id=model.id,
@@ -132,13 +170,15 @@ class TaskExecutionService(BaseService):
                 "model_params": model_params,
             },
             status="running",
-            started_at=datetime.now(timezone.utc),
+            started_at=started_at,
+            last_heartbeat_at=started_at,
         )
         self.uow.task_attempts.add(attempt)
         task_case.status = "running"
+        task_case.last_heartbeat_at = started_at
         task.status = "running"
         if task.started_at is None:
-            task.started_at = datetime.now(timezone.utc)
+            task.started_at = started_at
         self.uow.session.flush()
         self.uow.commit()
 
@@ -154,29 +194,52 @@ class TaskExecutionService(BaseService):
         try:
             response = await adapter.generate(request)
         except AdapterError as exc:
+            finished_at = _now()
             attempt.status = "failed"
             attempt.error_code = "MODEL_REQUEST_FAILED"
             attempt.error_message = str(exc)
-            attempt.finished_at = datetime.now(timezone.utc)
+            attempt.finished_at = finished_at
+            attempt.last_heartbeat_at = finished_at
             task_case.status = "failed"
+            task_case.last_heartbeat_at = finished_at
             task.failed_cases += 1
             self._refresh_task_progress(task)
             self.uow.session.flush()
             self.uow.commit()
             return attempt.id
 
+        finished_at = _now()
         attempt.status = "succeeded"
         attempt.output_text = response.text
         attempt.latency_ms = response.latency_ms
         attempt.prompt_tokens = response.prompt_tokens
         attempt.completion_tokens = response.completion_tokens
-        attempt.finished_at = datetime.now(timezone.utc)
+        attempt.finished_at = finished_at
+        attempt.last_heartbeat_at = finished_at
         task_case.status = "succeeded"
+        task_case.last_heartbeat_at = finished_at
         task.completed_cases += 1
         self._refresh_task_progress(task)
         self.uow.session.flush()
         self.uow.commit()
         return attempt.id
+
+    def touch_heartbeat(self, task_case_id: int) -> None:
+        """让正在执行的用例更新心跳，Worker 被 kill 后由 recovery 依据超时回滚。"""
+        now = _now()
+        task_case = self.uow.task_cases.get(task_case_id)
+        if task_case is None:
+            return
+        task_case.last_heartbeat_at = now
+        running_attempts = self.uow.task_attempts.list(
+            page=1,
+            page_size=10,
+            task_case_id=task_case_id,
+            status="running",
+        )
+        for attempt in running_attempts:
+            attempt.last_heartbeat_at = now
+        self.uow.session.flush()
 
     def prepare_retry_failed(self, task_id: int) -> list[int]:
         task = self.uow.evaluation_tasks.get(task_id)
@@ -203,6 +266,7 @@ class TaskExecutionService(BaseService):
         self._refresh_task_counts(task)
         task.status = "queued"
         task.cancel_requested = False
+        task.pause_requested = False
         task.error_message = None
         task.finished_at = None
         self.uow.session.flush()
@@ -254,6 +318,7 @@ class TaskExecutionService(BaseService):
         )
 
     def _fail_before_attempt(self, task: EvaluationTask, task_case: TaskCase, code: str, message: str) -> int:
+        now = _now()
         attempt = TaskAttempt(
             task_case_id=task_case.id,
             model_id=0,
@@ -261,11 +326,13 @@ class TaskExecutionService(BaseService):
             status="failed",
             error_code=code,
             error_message=message,
-            started_at=datetime.now(timezone.utc),
-            finished_at=datetime.now(timezone.utc),
+            started_at=now,
+            finished_at=now,
+            last_heartbeat_at=now,
         )
         self.uow.task_attempts.add(attempt)
         task_case.status = "failed"
+        task_case.last_heartbeat_at = now
         task.failed_cases += 1
         self._refresh_task_progress(task)
         self.uow.session.flush()
@@ -275,11 +342,11 @@ class TaskExecutionService(BaseService):
     def _refresh_task_progress(self, task: EvaluationTask) -> None:
         finished = task.completed_cases + task.failed_cases
         task.progress = 0.0 if task.total_cases == 0 else min(1.0, finished / task.total_cases)
-        if task.progress >= 1.0:
+        if task.progress >= 1.0 and not task.pause_requested and not task.cancel_requested:
             if task.failed_cases == 0:
                 task.status = "succeeded"
             elif task.completed_cases == 0:
                 task.status = "failed"
             else:
                 task.status = "partially_failed"
-            task.finished_at = datetime.now(timezone.utc)
+            task.finished_at = _now()

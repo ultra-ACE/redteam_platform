@@ -1,6 +1,11 @@
+import logging
+
 from celery import Celery
+from celery.signals import worker_ready
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "llm_eval",
@@ -20,3 +25,14 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(["app.workers"])
+
+
+@worker_ready.connect
+def _recover_incomplete_tasks_on_startup(sender=None, **kwargs) -> None:  # noqa: ARG001
+    """Worker 启动时扫描未完成任务，恢复 pending 用例。"""
+    try:
+        from app.workers.tasks import dispatch_recovery
+        dispatch_recovery.delay()
+        logger.info("recovery dispatched on worker ready")
+    except Exception:
+        logger.exception("failed to dispatch recovery on worker ready")

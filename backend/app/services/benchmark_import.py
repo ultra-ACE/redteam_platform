@@ -11,7 +11,14 @@ from uuid import uuid4
 from app.db.models import Benchmark, BenchmarkVersion, TestCase
 from app.schemas import BenchmarkImportError, BenchmarkImportResult
 from app.services.base import BaseService
-from app.services.dataset_adapters import CanonicalCase, detect_adapter
+from app.services.dataset_adapters import (
+    DATASET_TYPES,
+    SAMPLE_KINDS,
+    CanonicalCase,
+    detect_adapter,
+    normalize_dataset_type,
+    normalize_sample_kind,
+)
 from app.services.storage import FileStorageService
 
 
@@ -88,9 +95,11 @@ class BenchmarkImportService(BaseService):
                 errors.append(BenchmarkImportError(row_number=row_number, message=str(exc)))
 
         self.uow.session.flush()
-        type_counts: dict[str, int] = {}
+        # dataset_type_counts 只统计三个合法枚举
+        type_counts: dict[str, int] = {code: 0 for code in DATASET_TYPES}
         for _, case, _ in valid_cases:
             type_counts[case.dataset_type] = type_counts.get(case.dataset_type, 0) + 1
+        type_counts = {key: value for key, value in type_counts.items() if value}
 
         benchmark_version.case_count = len(valid_cases)
         benchmark_version.status = "ready" if valid_cases else "failed"
@@ -192,6 +201,9 @@ class BenchmarkImportService(BaseService):
         content_hash = hashlib.sha256(
             f"{case.system_prompt or ''}\n{case.prompt}".encode("utf-8")
         ).hexdigest()
+        # 双保险：即使适配器漏掉规范化，这里也保证写入合法枚举
+        dataset_type = normalize_dataset_type(case.dataset_type)
+        sample_kind = normalize_sample_kind(case.sample_kind)
         return TestCase(
             benchmark_version_id=benchmark_version_id,
             external_id=case.external_id[:128],
@@ -199,8 +211,8 @@ class BenchmarkImportService(BaseService):
             system_prompt=case.system_prompt,
             language=(case.language or "zh")[:32],
             source_label=case.raw_labels[0] if case.raw_labels else None,
-            dataset_type=case.dataset_type,
-            sample_kind=case.sample_kind,
+            dataset_type=dataset_type,
+            sample_kind=sample_kind,
             case_metadata=case.metadata,
             content_hash=content_hash,
             status="active",

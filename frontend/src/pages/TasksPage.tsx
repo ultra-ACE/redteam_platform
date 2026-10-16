@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EyeOutlined, PlusOutlined, RedoOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import {
+  EyeOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  RedoOutlined,
+  ReloadOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { Button, Form, Input, InputNumber, Modal, Progress, Select, Space, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,6 +19,8 @@ import {
   listJudgeProfiles,
   listModels,
   listTasks,
+  pauseTask,
+  resumeTask,
   retryFailedTask,
   startTask,
 } from '../api';
@@ -63,6 +73,24 @@ export function TasksPage() {
     onError: (error: Error) => message.error(error.message),
   });
 
+  const pauseMutation = useMutation({
+    mutationFn: pauseTask,
+    onSuccess: () => {
+      message.success('任务已暂停，已开始的用例会安全执行完成');
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: resumeTask,
+    onSuccess: () => {
+      message.success('任务已继续，仅重跑未完成的用例');
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
   const retryMutation = useMutation({
     mutationFn: retryFailedTask,
     onSuccess: (data) => {
@@ -72,11 +100,14 @@ export function TasksPage() {
     onError: (error: Error) => message.error(error.message),
   });
 
+  const canPause = (status: string) => status === 'running' || status === 'queued';
+  const canResume = (status: string) => status === 'paused';
+
   return (
     <div className="page-stack">
       <PageHeader
         title="评测任务"
-        description="选择 Benchmark、被测模型、Judge 和规则集，创建越狱安全评测任务。"
+        description="选择 Benchmark、被测模型、Judge 和规则集，创建越狱安全评测任务，并支持暂停/继续/断点续跑。"
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => tasksQuery.refetch()}>
@@ -109,9 +140,9 @@ export function TasksPage() {
           { title: '创建时间', dataIndex: 'created_at', render: formatDateTime },
           {
             title: '操作',
-            width: 180,
+            width: 300,
             render: (_, record) => (
-              <Space>
+              <Space wrap>
                 <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/tasks/${record.task_id}`)}>
                   详情
                 </Button>
@@ -123,6 +154,26 @@ export function TasksPage() {
                     onClick={() => startMutation.mutate(record.task_id)}
                   >
                     启动
+                  </Button>
+                ) : null}
+                {canPause(record.status) ? (
+                  <Button
+                    type="link"
+                    icon={<PauseCircleOutlined />}
+                    loading={pauseMutation.isPending}
+                    onClick={() => pauseMutation.mutate(record.task_id)}
+                  >
+                    暂停
+                  </Button>
+                ) : null}
+                {canResume(record.status) ? (
+                  <Button
+                    type="link"
+                    icon={<PlayCircleOutlined />}
+                    loading={resumeMutation.isPending}
+                    onClick={() => resumeMutation.mutate(record.task_id)}
+                  >
+                    继续
                   </Button>
                 ) : null}
                 {record.status === 'failed' || record.status === 'partially_failed' ? (
