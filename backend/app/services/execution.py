@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy import text
+
 from app.adapters import AdapterError, GenerateRequest, build_adapter
 from app.db.models import (
     EvaluationTask,
@@ -202,8 +204,9 @@ class TaskExecutionService(BaseService):
             attempt.last_heartbeat_at = finished_at
             task_case.status = "failed"
             task_case.last_heartbeat_at = finished_at
-            task.failed_cases += 1
+            
             self._refresh_task_progress(task)
+            
             self.uow.session.flush()
             self.uow.commit()
             return attempt.id
@@ -218,8 +221,9 @@ class TaskExecutionService(BaseService):
         attempt.last_heartbeat_at = finished_at
         task_case.status = "succeeded"
         task_case.last_heartbeat_at = finished_at
-        task.completed_cases += 1
+        
         self._refresh_task_progress(task)
+        
         self.uow.session.flush()
         self.uow.commit()
         return attempt.id
@@ -254,7 +258,7 @@ class TaskExecutionService(BaseService):
         )
         failed_cases = [task_case for task_case in task_cases if task_case.status in {"failed", "timeout"}]
         if not failed_cases:
-            self._refresh_task_counts(task)
+            self._refresh_task_progress(task)
             self.uow.session.flush()
             return []
 
@@ -263,7 +267,9 @@ class TaskExecutionService(BaseService):
             task_case.retry_count += 1
         self.uow.session.flush()
 
-        self._refresh_task_counts(task)
+        self._refresh_task_progress(task)
+        
+        # 强制把主状态切回 queued，以便重新派发
         task.status = "queued"
         task.cancel_requested = False
         task.pause_requested = False
@@ -271,16 +277,6 @@ class TaskExecutionService(BaseService):
         task.finished_at = None
         self.uow.session.flush()
         return [task_case.id for task_case in failed_cases]
-
-    def _refresh_task_counts(self, task: EvaluationTask) -> None:
-        total = self.uow.task_cases.count(task_id=task.id)
-        completed = self.uow.task_cases.count(task_id=task.id, status="succeeded")
-        failed = self.uow.task_cases.count(task_id=task.id, status="failed")
-        finished = completed + failed
-        task.total_cases = total
-        task.completed_cases = completed
-        task.failed_cases = failed
-        task.progress = 0.0 if total == 0 else min(1.0, finished / total)
 
     def _target_bindings(self, task_id: int):
         bindings = self.uow.task_model_bindings.list(
@@ -333,20 +329,71 @@ class TaskExecutionService(BaseService):
         self.uow.task_attempts.add(attempt)
         task_case.status = "failed"
         task_case.last_heartbeat_at = now
-        task.failed_cases += 1
+        
         self._refresh_task_progress(task)
+        
         self.uow.session.flush()
         self.uow.commit()
         return attempt.id
 
     def _refresh_task_progress(self, task: EvaluationTask) -> None:
-        finished = task.completed_cases + task.failed_cases
-        task.progress = 0.0 if task.total_cases == 0 else min(1.0, finished / task.total_cases)
-        if task.progress >= 1.0 and not task.pause_requested and not task.cancel_requested:
-            if task.failed_cases == 0:
-                task.status = "succeeded"
-            elif task.completed_cases == 0:
-                task.status = "failed"
+        """
+        使用原生 SQL 强制更新主表，绕过 SQLAlchemy 的 Session 缓存。
+        彻底解决高并发下进度覆盖、状态卡在 running/paused 的问题。
+        """
+        # 1. 从数据库获取最新真实数据
+        total = self.uow.task_cases.count(task_id=task.id)
+        completed = self.uow.task_cases.count(task_id=task.id, status="succeeded")
+        failed = self.uow.task_cases.count(task_id=task.id, status="failed")
+        finished = completed + failed
+        progress = 0.0 if total == 0 else min(1.0, finished / total)
+
+        # 2. 准备原生 SQL 更新
+        update_data = {
+            "total": total, 
+            "completed": completed, 
+            "failed": failed, 
+            "progress": progress, 
+            "task_id": task.id,
+            "updated_at": _now()
+        }
+        set_clauses = [
+            "total_cases = :total",
+            "completed_cases = :completed",
+            "failed_cases = :failed",
+            "progress = :progress",
+            "updated_at = :updated_at"
+        ]
+
+        # 3. 判断是否满足结束条件 (进度 100% 且没有暂停/取消)
+        if progress >= 1.0 and not task.pause_requested and not task.cancel_requested:
+            if failed == 0:
+                final_status = "succeeded"
+            elif completed == 0:
+                final_status = "failed"
             else:
-                task.status = "partially_failed"
-            task.finished_at = _now()
+                final_status = "partially_failed"
+            
+            set_clauses.append("status = :status")
+            set_clauses.append("finished_at = :finished_at")
+            update_data["status"] = final_status
+            update_data["finished_at"] = _now()
+            
+            # 同步内存中的对象
+            task.status = final_status
+            task.finished_at = update_data["finished_at"]
+        elif progress < 1.0 and task.status != "running" and not task.pause_requested and not task.cancel_requested:
+            # 如果之前是 queued，现在有进度了，强制变成 running
+            set_clauses.append("status = :status")
+            update_data["status"] = "running"
+            task.status = "running"
+
+        # 4. 执行原生 SQL
+        sql = text(f"UPDATE evaluation_tasks SET {', '.join(set_clauses)} WHERE id = :task_id")
+        self.uow.session.execute(sql, update_data)
+
+        # 5. 同步内存中的对象，防止当前事务里的代码读到旧数据
+        task.total_cases = total
+        task.completed_cases = completed
+        task.failed_cases = failed
+        task.progress = progress
