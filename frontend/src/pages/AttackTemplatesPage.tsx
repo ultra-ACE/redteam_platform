@@ -6,7 +6,6 @@ import {
   createAttackTemplate,
   createAttackTemplateVersion,
   disableAttackTemplate,
-  listAttackMethods,
   listAttackTemplates,
   listAttackTemplateVersions,
   previewAttackTemplate,
@@ -14,8 +13,15 @@ import {
   updateAttackTemplate,
 } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
-import type { AttackTemplate, AttackTemplatePreviewResult } from '../types/api';
 
+import type { AttackTemplate, AttackTemplatePreviewResult } from '../types/api';
+// 攻击方式固定为四种，不再从后端拉取
+const FIXED_ATTACK_METHODS = [
+  { code: 'direct_request', name: '直接请求' },
+  { code: 'role_play', name: '角色扮演' },
+  { code: 'prefix_injection', name: '前缀注入' },
+  { code: 'refusal_suppression', name: '拒答抑制' },
+ ];
 export function AttackTemplatesPage() {
   const queryClient = useQueryClient();
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -27,8 +33,7 @@ export function AttackTemplatesPage() {
   const [templateForm] = Form.useForm();
   const [versionForm] = Form.useForm();
 
-  const methodsQuery = useQuery({ queryKey: ['attack-methods'], queryFn: listAttackMethods });
-  const templatesQuery = useQuery({ queryKey: ['attack-templates'], queryFn: () => listAttackTemplates({ page_size: 200 }) });
+    const templatesQuery = useQuery({ queryKey: ['attack-templates'], queryFn: () => listAttackTemplates({ page_size: 200 }) });
   const versionsQuery = useQuery({
     queryKey: ['attack-template-versions', versionTemplate?.attack_template_id],
     queryFn: () => listAttackTemplateVersions(versionTemplate!.attack_template_id),
@@ -84,7 +89,7 @@ export function AttackTemplatesPage() {
     onError: (error: Error) => message.error(error.message),
   });
 
-  const methods = methodsQuery.data?.items ?? [];
+   const methods = FIXED_ATTACK_METHODS;
   const templates = templatesQuery.data?.items ?? [];
   const versions = versionsQuery.data ?? [];
 

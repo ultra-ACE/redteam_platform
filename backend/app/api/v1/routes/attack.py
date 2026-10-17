@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import get_uow
 from app.api.utils import ok, require_local_token
 from app.schemas import (
     ApiResponse,
-    AttackMethod,
     AttackTemplate,
     AttackTemplateCreateRequest,
     AttackTemplatePreviewRequest,
@@ -12,58 +11,10 @@ from app.schemas import (
     AttackTemplateUpdateRequest,
     AttackTemplateValidationResult,
     AttackTemplateVersionCreateRequest,
-    PaginatedData,
 )
 from app.services import AttackTemplateService, UnitOfWork
 
 router = APIRouter()
-
-
-@router.get(
-    "/attack-methods",
-    response_model=ApiResponse[PaginatedData[AttackMethod]],
-    operation_id="listAttackMethods",
-    tags=["攻击方法"],
-)
-async def list_attack_methods(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    service = AttackTemplateService(uow)
-    items = service.list_methods()
-    start = (page - 1) * page_size
-    paged = items[start:start + page_size]
-    total = len(items)
-    return ok(PaginatedData[AttackMethod](items=paged, page=page, page_size=page_size, total=total).model_dump())
-
-
-@router.get(
-    "/attack-templates",
-    response_model=ApiResponse[PaginatedData[AttackTemplate]],
-    operation_id="listAttackTemplates",
-    tags=["攻击模板"],
-)
-async def list_attack_templates(
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
-    method_code: str | None = None,
-    name: str | None = None,
-    status: str | None = None,
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    service = AttackTemplateService(uow)
-    items = service.list_templates(
-        page=page,
-        page_size=page_size,
-        method_code=method_code,
-        name=name,
-        status=status,
-    )
-    total = uow.attack_templates.count(method_code=method_code, status=status)
-    return ok(PaginatedData[AttackTemplate](items=items, page=page, page_size=page_size, total=total).model_dump())
 
 
 @router.post(

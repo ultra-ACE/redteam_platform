@@ -32,9 +32,7 @@ ATTACK_METHODS = [
 
 
 class AttackTemplateService(BaseService):
-    def list_methods(self) -> list[dict[str, str]]:
-        return ATTACK_METHODS
-
+   
     def list_templates(
         self,
         page: int = 1,
