@@ -50,7 +50,13 @@ def execute_task(task_id: int) -> list[int]:
     # 只派发 pending 状态的用例；已成功/已失败/已取消不重跑
     with SessionLocal() as session:
         uow = UnitOfWork(session)
-        pending_ids = TaskExecutionService(uow).list_pending_case_ids(task_id)
+        service = TaskExecutionService(uow)
+        pending_ids = service.list_pending_case_ids(task_id)
+        if not pending_ids:
+            # 重新开始时如果已经没有 pending（用例全部有结论），同样要收尾，
+            # 否则任务会停在 queued 不会再有任何进度刷新。
+            service.refresh_task_state(task_id)
+        uow.commit()
 
     for task_case_id in pending_ids:
         run_task_case.delay(task_case_id)
@@ -62,10 +68,16 @@ def dispatch_pending_task(task_id: int) -> list[int]:
     """resume 专用：只派发 pending 用例。"""
     with SessionLocal() as session:
         uow = UnitOfWork(session)
-        pending_ids = TaskExecutionService(uow).list_pending_case_ids(task_id)
+        service = TaskExecutionService(uow)
+        pending_ids = service.list_pending_case_ids(task_id)
         task = uow.evaluation_tasks.get(task_id)
         if task is not None and task.status in {"paused", "draft"}:
             task.status = "queued"
+        if not pending_ids:
+            # 没有待跑用例（暂停期间剩的用例已经跑完，或本来就不剩），
+            # 不会再有任何 run_task_case 触发进度刷新，必须在这里收尾一次，
+            # 否则任务会永远停在 queued，完成数也停在旧值。
+            service.refresh_task_state(task_id)
         uow.commit()
 
     for task_case_id in pending_ids:

@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.db.models import EvaluationTask, TaskCase
 from app.db.session import SessionLocal
+from app.services.execution import TaskExecutionService
 from app.services.uow import UnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ def recover_incomplete_tasks() -> dict[str, int]:
                     select(TaskCase).where(TaskCase.task_id == task.id)
                 ).all()
             )
+            task_has_pending = False
             for task_case in task_cases:
                 # 失联的 running 用例回滚为 pending
                 if task_case.status == "running":
@@ -71,9 +73,16 @@ def recover_incomplete_tasks() -> dict[str, int]:
                         summary["reset_running"] += 1
 
                 if task_case.status == "pending":
+                    task_has_pending = True
                     summary["pending_case_ids"].append(task_case.id)
 
             uow.session.flush()
+
+            if not task_has_pending:
+                # 没有可恢复的用例（用例都已有结论，只是主任务状态没收尾：
+                # 比如用例在暂停/停机期间跑完），这里补一次收尾，避免任务停在
+                # queued/running，进度和完成数也不再更新。
+                TaskExecutionService(uow).refresh_task_state(task.id)
 
         uow.commit()
 

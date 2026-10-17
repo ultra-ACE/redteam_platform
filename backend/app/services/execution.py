@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import select
 
 from app.adapters import AdapterError, GenerateRequest, build_adapter
 from app.db.models import (
@@ -128,6 +128,8 @@ class TaskExecutionService(BaseService):
         if task.cancel_requested:
             task_case.status = "cancelled"
             self.uow.session.flush()
+            # 必须提交：Session 关闭时会回滚未提交的改动，用例会一直停在 pending
+            self.uow.commit()
             return None
 
         # 2) 暂停：不派发新用例，保持 pending，等待 resume
@@ -135,6 +137,7 @@ class TaskExecutionService(BaseService):
             if task_case.status not in {"succeeded", "failed", "cancelled"}:
                 task_case.status = "pending"
             self.uow.session.flush()
+            self.uow.commit()
             return None
 
         # 3) 已终止的用例绝不重跑
@@ -148,7 +151,11 @@ class TaskExecutionService(BaseService):
         test_case = self.uow.test_cases.get(task_case.test_case_id)
         if test_case is None:
             task_case.status = "failed"
+            task_case.last_heartbeat_at = _now()
+            # 同样要刷新并提交，否则这条失败既不会计入进度、也会被 Session 关闭回滚
+            self._refresh_task_progress(task)
             self.uow.session.flush()
+            self.uow.commit()
             return None
 
         model_id = (task_case.case_config or {}).get("model_id")
@@ -336,64 +343,84 @@ class TaskExecutionService(BaseService):
         self.uow.commit()
         return attempt.id
 
+    def refresh_task_state(self, task_id: int) -> None:
+        """没有用例可派发时也要收尾（resume / recovery 场景）。
+
+        例如暂停期间剩下的用例已经在后台跑完，恢复后 ``pending`` 为空：
+        此时没有任何 ``run_task_case`` 会再触发一次进度刷新，任务就会永远停在
+        ``queued``。所以派发之前/之后必须无条件刷新一次。
+        """
+        task = self.uow.evaluation_tasks.get(task_id)
+        if task is None:
+            return
+        self._refresh_task_progress(task)
+        self.uow.session.flush()
+
     def _refresh_task_progress(self, task: EvaluationTask) -> None:
+        """把用例的真实完成情况汇总回主任务表，并决定任务是否已经结束。
+
+        这里踩过两个坑，改之前请务必保留下面两步：
+
+        1. ``SessionLocal`` 是 ``autoflush=False``，所以必须先 ``flush``。
+           否则下面的 COUNT 看不到本事务里刚写入的那条用例状态，
+           completed/failed 永远差一条，进度到不了 100%，任务就永远不会收尾
+           （表现：用例全跑完了，任务还停在 queued/running，完成数少 1）。
+        2. 多个 Worker 会同时刷新同一个任务，先对任务行加锁再统计，
+           保证拿到的是"别的用例已经提交之后"的计数，
+           也不会把已经结束的任务再改回 running。
         """
-        使用原生 SQL 强制更新主表，绕过 SQLAlchemy 的 Session 缓存。
-        彻底解决高并发下进度覆盖、状态卡在 running/paused 的问题。
-        """
-        # 1. 从数据库获取最新真实数据
+        # 1. 先落地本事务内的用例状态变化（autoflush=False 时 COUNT 看不到未 flush 的改动）
+        self.uow.session.flush()
+
+        # 2. 锁住任务行，读最新的暂停/取消标志（内存里的 task 可能在模型调用期间过期）
+        row = self.uow.session.execute(
+            select(
+                EvaluationTask.status,
+                EvaluationTask.finished_at,
+                EvaluationTask.pause_requested,
+                EvaluationTask.cancel_requested,
+            )
+            .where(EvaluationTask.id == task.id)
+            .with_for_update()
+        ).one_or_none()
+        if row is None:
+            return
+        current_status, current_finished_at, pause_requested, cancel_requested = row
+
+        # 3. 统计真实进度
         total = self.uow.task_cases.count(task_id=task.id)
         completed = self.uow.task_cases.count(task_id=task.id, status="succeeded")
         failed = self.uow.task_cases.count(task_id=task.id, status="failed")
         finished = completed + failed
         progress = 0.0 if total == 0 else min(1.0, finished / total)
 
-        # 2. 准备原生 SQL 更新
-        update_data = {
-            "total": total, 
-            "completed": completed, 
-            "failed": failed, 
-            "progress": progress, 
-            "task_id": task.id,
-            "updated_at": _now()
-        }
-        set_clauses = [
-            "total_cases = :total",
-            "completed_cases = :completed",
-            "failed_cases = :failed",
-            "progress = :progress",
-            "updated_at = :updated_at"
-        ]
+        # 4. 同步内存对象，防止调用方读到旧数据
+        task.total_cases = total
+        task.completed_cases = completed
+        task.failed_cases = failed
+        task.progress = progress
+        task.pause_requested = pause_requested
+        task.cancel_requested = cancel_requested
+        task.finished_at = current_finished_at
 
-        # 3. 判断是否满足结束条件 (进度 100% 且没有暂停/取消)
-        if progress >= 1.0 and not task.pause_requested and not task.cancel_requested:
+        # 暂停/取消期间只更新计数，不改主状态（取消由 cancel_task 负责收尾）
+        if pause_requested or cancel_requested:
+            return
+
+        if total > 0 and finished >= total:
+            # 5. 全部用例都有结论 -> 收尾
             if failed == 0:
                 final_status = "succeeded"
             elif completed == 0:
                 final_status = "failed"
             else:
                 final_status = "partially_failed"
-            
-            set_clauses.append("status = :status")
-            set_clauses.append("finished_at = :finished_at")
-            update_data["status"] = final_status
-            update_data["finished_at"] = _now()
-            
-            # 同步内存中的对象
             task.status = final_status
-            task.finished_at = update_data["finished_at"]
-        elif progress < 1.0 and task.status != "running" and not task.pause_requested and not task.cancel_requested:
-            # 如果之前是 queued，现在有进度了，强制变成 running
-            set_clauses.append("status = :status")
-            update_data["status"] = "running"
+            if task.finished_at is None:
+                task.finished_at = _now()
+        elif current_status in {"queued", "draft"}:
+            # 有进度了但还没结束：queued/draft -> running
             task.status = "running"
-
-        # 4. 执行原生 SQL
-        sql = text(f"UPDATE evaluation_tasks SET {', '.join(set_clauses)} WHERE id = :task_id")
-        self.uow.session.execute(sql, update_data)
-
-        # 5. 同步内存中的对象，防止当前事务里的代码读到旧数据
-        task.total_cases = total
-        task.completed_cases = completed
-        task.failed_cases = failed
-        task.progress = progress
+        else:
+            # 其它情况（running / 已结束）保持数据库里的状态，只是同步一下内存对象
+            task.status = current_status

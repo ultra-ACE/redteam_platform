@@ -11,6 +11,9 @@ from app.db.models import (
 )
 from app.services.base import BaseService
 
+#: 已经有结论、不能再被 暂停/恢复 改写的任务状态
+TERMINAL_TASK_STATUSES = {"succeeded", "partially_failed", "failed", "cancelled"}
+
 
 class BenchmarkService(BaseService):
     def list_benchmarks(self, page: int, page_size: int, keyword: str | None = None, status: str | None = None):
@@ -244,6 +247,9 @@ class TaskService(BaseService):
         task = self.uow.evaluation_tasks.get(task_id)
         if task is None:
             return None
+        # 已经有结论的任务不允许再被改成 paused，否则会覆盖掉完成状态
+        if task.status in TERMINAL_TASK_STATUSES:
+            return task
         task.pause_requested = True
         task.status = "paused"
         self.uow.session.flush()
