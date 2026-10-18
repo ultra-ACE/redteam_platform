@@ -48,7 +48,8 @@ class AttackTemplateService(BaseService):
             name=name,
             status=status,
         )
-
+    def list_methods(self) -> list[dict[str, str]]:
+        return ATTACK_METHODS
     def get_template(self, template_id: int) -> AttackTemplate | None:
         return self.uow.attack_templates.get(template_id)
 
