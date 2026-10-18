@@ -23,7 +23,7 @@ router = APIRouter()
     "/attack-methods",
     response_model=ApiResponse[PaginatedData[AttackMethod]],
     operation_id="listAttackMethods",
-    tags=["攻击方法"],
+    tags=["攻击方式"],
 )
 async def list_attack_methods(
     page: int = Query(default=1, ge=1),
