@@ -110,6 +110,13 @@ export function ModelsPage() {
             { title: '适配器', dataIndex: 'adapter_type', render: (value) => <Tag color="blue">{value}</Tag> },
             { title: '用途', dataIndex: 'usage_scope', render: (value) => <Tag color="purple">{value}</Tag> },
             {
+              title: '密钥',
+              dataIndex: 'secret_ref',
+              width: 190,
+              render: (value: string | null | undefined) =>
+                value ? <Tag color="default">{value}</Tag> : <Tag>未配置</Tag>,
+            },
+            {
               title: '状态',
               dataIndex: 'enabled',
               width: 100,
@@ -145,7 +152,7 @@ export function ModelsPage() {
                     onClick={() => {
                       setEditingModel(record);
                       setOpen(true);
-                      form.setFieldsValue(record);
+                      form.setFieldsValue({ ...record, secret_ref: '' });
                     }}
                   >
                     编辑
@@ -209,9 +216,13 @@ export function ModelsPage() {
           <Form.Item
             name="secret_ref"
             label="密钥引用"
-            extra="格式为 env:变量名 或 literal:真实Key。推荐 env:DEEPSEEK_API_KEY，并把 Key 写在 .env 中，避免明文入库。"
+            extra={
+              editingModel?.secret_configured
+                ? `当前已配置：${editingModel.secret_ref ?? '****'}。留空表示不修改，重新填写才会覆盖。`
+                : '格式为 env:变量名 或 literal:真实Key。推荐 env:DEEPSEEK_API_KEY，把 Key 写在 .env 中，避免明文入库。'
+            }
           >
-            <Input placeholder="env:DEEPSEEK_API_KEY" />
+            <Input placeholder={editingModel ? '留空表示不修改' : 'env:DEEPSEEK_API_KEY'} />
           </Form.Item>
           <Form.Item name="usage_scope" label="用途" rules={[{ required: true }]}>
             <Select

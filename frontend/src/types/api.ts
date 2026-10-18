@@ -30,6 +30,7 @@ export type ModelRecord = {
   base_url: string;
   model_name: string;
   secret_ref?: string | null;
+  secret_configured?: boolean;
   usage_scope: string;
   enabled: boolean;
   created_at?: string;

@@ -3788,6 +3788,10 @@ components:
           - type: string
           - type: 'null'
           title: Secret Ref
+        secret_configured:
+          type: boolean
+          title: Secret Configured
+          default: false
         usage_scope:
           $ref: '#/components/schemas/ModelUsageScope'
         enabled:

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator, model_validator
 
 from .common import ORMSchema
 from .enums import (
@@ -84,6 +84,30 @@ class TestCase(ORMSchema):
     status: str = "active"
 
 
+def mask_secret_ref(value: object) -> str | None:
+    """模型密钥只返回可辨识的掩码，绝不把明文回传给前端。
+
+    - ``env:XXX`` 只暴露环境变量名，本身不是密钥；
+    - ``literal:真实Key`` 只保留后四位；
+    - 无前缀的旧数据同样按明文处理。
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.startswith("env:"):
+        return text
+    prefix = ""
+    body = text
+    if text.startswith("literal:"):
+        prefix = "literal:"
+        body = text[len("literal:"):]
+    if len(body) <= 4:
+        return f"{prefix}****"
+    return f"{prefix}****{body[-4:]}"
+
+
 class Model(ORMSchema):
     model_id: int = Field(validation_alias=AliasChoices("model_id", "id"), serialization_alias="model_id")
     name: str
@@ -92,9 +116,20 @@ class Model(ORMSchema):
     base_url: str
     model_name: str
     secret_ref: str | None = None
+    secret_configured: bool = False
     usage_scope: ModelUsageScope
     enabled: bool = True
     created_at: datetime | None = None
+
+    @field_validator("secret_ref", mode="before")
+    @classmethod
+    def _mask_secret_ref(cls, value: object) -> str | None:
+        return mask_secret_ref(value)
+
+    @model_validator(mode="after")
+    def _fill_secret_configured(self) -> "Model":
+        self.secret_configured = self.secret_ref is not None
+        return self
 
 
 class HealthCheckData(ORMSchema):

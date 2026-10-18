@@ -163,6 +163,12 @@ class ModelService(BaseService):
             if value is not None:
                 if hasattr(value, "value"):
                     value = value.value
+                if field == "secret_ref":
+                    # 前端只拿到掩码；回传掩码或留空都表示"不修改"
+                    text = str(value).strip()
+                    if not text or "****" in text:
+                        continue
+                    value = text
                 setattr(model, field, value)
         self.uow.session.flush()
         return model
