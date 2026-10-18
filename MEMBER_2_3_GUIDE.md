@@ -204,6 +204,24 @@ git push origin <自己的分支>
 
 ## 四、常见问题
 
+### 看不到 contract-freeze-v1
+
+`git branch -r` 只列远端分支，不会显示 tag。检查 tag 要用：
+
+```powershell
+git fetch origin --tags
+git tag -l "contract-freeze*"
+git ls-remote --tags origin
+```
+
+确认 tag 指向的提交：
+
+```powershell
+git rev-list -n 1 contract-freeze-v1
+```
+
+`contract-freeze-v1` 与 `origin/codex/contract-freeze` 指向同一个提交，用哪个作为 rebase 基线都可以。
+
 ### 前端报错
 
 ```text
