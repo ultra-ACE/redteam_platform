@@ -78,6 +78,7 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const healthQuery = useQuery({ queryKey: ['health'], queryFn: getHealth, retry: false });
+  const serviceDegraded = healthQuery.data?.status === 'degraded';
 
   const selectedKey = useMemo(() => {
     const path = location.pathname;
@@ -138,10 +139,18 @@ export function AppLayout() {
           </Flex>
 
           <Space size={14}>
-            <Tooltip title={healthQuery.isError ? '后端未连接' : '后端服务正常'}>
-              <Tag className="soft-tag" color={healthQuery.isError ? 'error' : 'success'}>
-                <Badge status={healthQuery.isError ? 'error' : 'processing'} />
-                {healthQuery.isError ? '后端离线' : '本地服务'}
+            <Tooltip
+              title={
+                healthQuery.isError
+                  ? '后端未连接'
+                  : serviceDegraded
+                    ? '数据库或 Redis 不可用，任务可能无法执行'
+                    : '后端服务正常'
+              }
+            >
+              <Tag className="soft-tag" color={healthQuery.isError ? 'error' : serviceDegraded ? 'warning' : 'success'}>
+                <Badge status={healthQuery.isError ? 'error' : serviceDegraded ? 'warning' : 'processing'} />
+                {healthQuery.isError ? '后端离线' : serviceDegraded ? '服务降级' : '本地服务'}
               </Tag>
             </Tooltip>
             <Tag className="soft-tag" color="blue">

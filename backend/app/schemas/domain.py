@@ -84,6 +84,19 @@ class TestCase(ORMSchema):
     status: str = "active"
 
 
+ATTACK_METHOD_ALIASES = {
+    "role_play_api": "role_play",
+    "roleplay": "role_play",
+    "role-play": "role_play",
+    "direct": "direct_request",
+    "direct_api": "direct_request",
+    "prefix": "prefix_injection",
+    "prefix-injection": "prefix_injection",
+    "refusal": "refusal_suppression",
+    "refusal-suppression": "refusal_suppression",
+}
+
+
 def mask_secret_ref(value: object) -> str | None:
     """模型密钥只返回可辨识的掩码，绝不把明文回传给前端。
 
@@ -156,6 +169,15 @@ class AttackTemplate(ORMSchema):
     variables: list[str] = Field(default_factory=list)
     version: str = "v1"
     status: str = "active"
+
+    @field_validator("method_code", mode="before")
+    @classmethod
+    def _normalize_method_code(cls, value: object) -> object:
+        """兼容历史数据里的写法，避免一条旧记录让整个列表接口 500。"""
+        if value is None:
+            return value
+        text = str(getattr(value, "value", value)).strip().lower()
+        return ATTACK_METHOD_ALIASES.get(text, text)
 
 
 class JudgeProfile(ORMSchema):

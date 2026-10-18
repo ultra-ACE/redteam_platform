@@ -29,7 +29,10 @@ import type {
 } from '../types/api';
 
 export const getHealth = async () => {
-  const { data } = await apiClient.get<ApiEnvelope<HealthData>>('/health');
+  // 503 表示依赖降级（例如 Redis 未启动），不是后端不可用
+  const { data } = await apiClient.get<ApiEnvelope<HealthData>>('/health', {
+    validateStatus: (status) => status === 200 || status === 503,
+  });
   return data.data;
 };
 

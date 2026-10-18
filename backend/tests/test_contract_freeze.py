@@ -46,6 +46,20 @@ def test_contract_enums_and_fixed_attack_methods() -> None:
     assert [item.value for item in ReportFormat] == ["html"]
 
 
+def test_legacy_attack_method_code_is_normalized() -> None:
+    from app.schemas.domain import AttackTemplate
+
+    template = AttackTemplate.model_validate(
+        {
+            "attack_template_id": 1,
+            "method_code": "role_play_api",
+            "name": "legacy",
+            "template_text": "{prompt}",
+        }
+    )
+    assert template.method_code == "role_play"
+
+
 def test_task_pause_and_resume_contract() -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
