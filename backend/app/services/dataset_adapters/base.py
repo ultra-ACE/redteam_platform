@@ -2,17 +2,91 @@
 
 各家 Benchmark 的字段名、标签体系和文件结构都不一样（HarmBench 用 ``Behavior`` /
 ``SemanticCategory``，AdvBench 用 ``Behavior`` / ``Category``，中文数据集用
-``提示词`` / ``风险类型``）。适配器负责：
+``提示词`` / ``数据集类型`` / ``样本类型``）。适配器负责：
 
 1. ``score()``：依据表头签名自动识别数据集来源；
 2. ``normalize()``：把任意结构的一行归一化成统一的 :class:`CanonicalCase`。
 
-这样"异构适配"发生在系统内部，后续的风险归一与标准化评测只面对同一种数据结构。
+这样"异构适配"发生在系统内部，后续的标准化评测只面对同一种数据结构。
 """
 from dataclasses import dataclass, field
 from typing import Any
 
 SEPARATORS = (";", "|", "，", "、", "；")
+
+#: dataset_type 契约冻结后的三个合法取值
+DATASET_TYPES: tuple[str, ...] = ("benign", "harmful", "jailbreak")
+#: sample_kind 契约冻结后的两个合法取值
+SAMPLE_KINDS: tuple[str, ...] = ("seed", "template")
+
+#: 中文 / 别名 -> 英文规范值
+_DATASET_TYPE_ALIASES: dict[str, str] = {
+    "benign": "benign",
+    "safe": "benign",
+    "safety": "benign",
+    "良性": "benign",
+    "安全": "benign",
+    "无害": "benign",
+    "正常": "benign",
+    "harmful": "harmful",
+    "unsafe": "harmful",
+    "toxicity": "harmful",
+    "有害": "harmful",
+    "危险": "harmful",
+    "恶意": "harmful",
+    "违规": "harmful",
+    "jailbreak": "jailbreak",
+    "attack": "jailbreak",
+    "adversarial": "jailbreak",
+    "越狱": "jailbreak",
+    "攻击": "jailbreak",
+    "对抗": "jailbreak",
+}
+
+_SAMPLE_KIND_ALIASES: dict[str, str] = {
+    "seed": "seed",
+    "raw": "seed",
+    "base": "seed",
+    "种子": "seed",
+    "原始": "seed",
+    "原始样本": "seed",
+    "template": "template",
+    "attack_template": "template",
+    "模板": "template",
+    "攻击模板": "template",
+    "提示模板": "template",
+}
+
+
+def normalize_dataset_type(value: Any, default: str = "harmful") -> str:
+    """把任意值规范化为 ``benign`` / ``harmful`` / ``jailbreak``。
+
+    未识别时回退到 ``default``（默认 ``harmful``），保证字段永远落在契约枚举内。
+    """
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return default
+    normalized = _DATASET_TYPE_ALIASES.get(text)
+    if normalized is None:
+        normalized = _DATASET_TYPE_ALIASES.get(text.lower())
+    if normalized is not None:
+        return normalized
+    return default
+
+
+def normalize_sample_kind(value: Any) -> str | None:
+    """把任意值规范化为 ``seed`` / ``template``，未识别返回 ``None``。"""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    normalized = _SAMPLE_KIND_ALIASES.get(text)
+    if normalized is None:
+        normalized = _SAMPLE_KIND_ALIASES.get(text.lower())
+    return normalized
 
 
 def normalize_key(key: Any) -> str:
@@ -133,6 +207,11 @@ class CanonicalCase:
     raw_labels: list[str] = field(default_factory=list)
     risk_codes: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # 契约冻结要求：dataset_type / sample_kind 永远落在枚举内
+        self.dataset_type = normalize_dataset_type(self.dataset_type)
+        self.sample_kind = normalize_sample_kind(self.sample_kind)
 
 
 @dataclass

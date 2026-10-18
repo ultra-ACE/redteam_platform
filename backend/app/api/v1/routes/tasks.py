@@ -21,7 +21,11 @@ from app.schemas import (
     TaskStatusData,
 )
 from app.services import EvaluationResultService, StatisticsService, TaskExecutionService, TaskService, UnitOfWork
-from app.workers.queue import enqueue_failed_task_cases, enqueue_task
+from app.workers.queue import (
+    enqueue_failed_task_cases,
+    enqueue_pending_task_cases,
+    enqueue_task,
+)
 
 router = APIRouter()
 
@@ -129,7 +133,6 @@ async def get_task_attempt_detail(
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
-    """返回单次尝试的完整证据链：提示词、模型输出、Judge 详情、规则命中、六维风险与复核状态。"""
     detail = EvaluationResultService(uow).get_attempt_detail(attempt_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="task attempt not found")
@@ -151,6 +154,8 @@ async def start_evaluation_task(
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     task.status = TaskStatus.queued.value
+    task.pause_requested = False
+    task.cancel_requested = False
     uow.session.flush()
     uow.commit()
     enqueue_task(task.id)
@@ -190,7 +195,8 @@ async def resume_evaluation_task(
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     uow.commit()
-    enqueue_task(task.id)
+    # 只派发 pending 用例，已成功的不重跑
+    enqueue_pending_task_cases(task.id)
     return ok(TaskActionData(task_id=task.id, status=task.status, pause_requested=task.pause_requested).model_dump())
 
 

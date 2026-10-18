@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeftOutlined, FileTextOutlined, RedoOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  FileTextOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
+  RedoOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
 import { Button, Card, Col, Descriptions, Flex, Progress, Row, Space, Spin, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getTaskEventsUrl, getTaskResults, getTaskStatistics, getTaskStatus, retryFailedTask } from '../api';
+import {
+  getTaskEventsUrl,
+  getTaskResults,
+  getTaskStatistics,
+  getTaskStatus,
+  pauseTask,
+  resumeTask,
+  retryFailedTask,
+} from '../api';
 import type { TaskStatusData } from '../types/api';
 import { AttemptDetailDrawer } from '../components/AttemptDetailDrawer';
 import { JudgeVerdictTag, PageHeader, TaskStatusTag } from '../components/ui';
@@ -24,7 +39,6 @@ export function TaskDetailPage() {
   });
   const id = Number(taskId);
 
-  /** 支持报告里的 /tasks/{id}?attempt={attemptId} 深链，直接展开对应尝试详情。 */
   useEffect(() => {
     const raw = Number(searchParams.get('attempt'));
     setDetailAttemptId(Number.isFinite(raw) && raw > 0 ? raw : null);
@@ -56,6 +70,26 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['task-status', id] });
       queryClient.invalidateQueries({ queryKey: ['task-results', id] });
       queryClient.invalidateQueries({ queryKey: ['task-statistics', id] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  const pauseMutation = useMutation({
+    mutationFn: () => pauseTask(id),
+    onSuccess: () => {
+      message.success('任务已暂停，正在执行的用例会安全结束');
+      queryClient.invalidateQueries({ queryKey: ['task-status', id] });
+      setStreamVersion((value) => value + 1);
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: () => resumeTask(id),
+    onSuccess: () => {
+      message.success('任务已继续，只重跑未完成的用例');
+      queryClient.invalidateQueries({ queryKey: ['task-status', id] });
+      setStreamVersion((value) => value + 1);
     },
     onError: (error: Error) => message.error(error.message),
   });
@@ -100,20 +134,31 @@ export function TaskDetailPage() {
     };
   }, [id, queryClient, streamVersion]);
 
-
   const status = statusQuery.data;
   const stats = statsQuery.data;
+  const canPause = status?.status === 'running' || status?.status === 'queued';
+  const canResume = status?.status === 'paused';
 
   return (
     <div className="page-stack">
       <PageHeader
         title={`任务详情 #${taskId}`}
-        description="查看任务进度、逐条结果、Judge 可信度、规则命中和数据集类型。"
+        description="查看任务进度、逐条结果、Judge 可信度、规则命中和数据集类型。支持暂停/继续/断点续跑。"
         extra={
-          <Space>
+          <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>
               返回任务列表
             </Button>
+            {canPause ? (
+              <Button icon={<PauseCircleOutlined />} loading={pauseMutation.isPending} onClick={() => pauseMutation.mutate()}>
+                暂停
+              </Button>
+            ) : null}
+            {canResume ? (
+              <Button icon={<PlayCircleOutlined />} loading={resumeMutation.isPending} onClick={() => resumeMutation.mutate()}>
+                继续
+              </Button>
+            ) : null}
             {status?.status === 'failed' || status?.status === 'partially_failed' ? (
               <Button icon={<RedoOutlined />} loading={retryMutation.isPending} onClick={() => retryMutation.mutate()}>
                 重试失败用例
@@ -144,6 +189,7 @@ export function TaskDetailPage() {
                 <Space>
                   <TaskStatusTag status={status?.status} />
                   <Tag color="blue">任务 #{id}</Tag>
+                  {status?.pause_requested ? <Tag color="warning">暂停请求中</Tag> : null}
                 </Space>
                 <Progress percent={Math.round((status?.progress ?? 0) * 100)} strokeColor={{ from: '#4f6ef7', to: '#7c4dff' }} />
                 <div style={{ color: '#64748b' }}>
@@ -156,6 +202,8 @@ export function TaskDetailPage() {
                 <Descriptions.Item label="开始时间">{formatDateTime(status?.started_at)}</Descriptions.Item>
                 <Descriptions.Item label="结束时间">{formatDateTime(status?.finished_at)}</Descriptions.Item>
                 <Descriptions.Item label="当前阶段">{status?.current_stage ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label="最近心跳">{formatDateTime(status?.last_heartbeat_at)}</Descriptions.Item>
+                <Descriptions.Item label="暂停请求">{status?.pause_requested ? '是' : '否'}</Descriptions.Item>
                 <Descriptions.Item label="取消请求">{status?.cancel_requested ? '是' : '否'}</Descriptions.Item>
               </Descriptions>
             </Col>
