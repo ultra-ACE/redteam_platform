@@ -454,7 +454,7 @@ paths:
   /api/v1/attack-methods:
     get:
       tags:
-      - 攻击方法
+      - 攻击方式
       summary: List Attack Methods
       operationId: listAttackMethods
       security:
@@ -1017,7 +1017,6 @@ paths:
       tags:
       - 评测任务
       summary: Get Task Attempt Detail
-      description: 返回单次尝试的完整证据链：提示词、模型输出、Judge 详情、规则命中、六维风险与复核状态。
       operationId: getTaskAttemptDetail
       security:
       - LocalToken: []
