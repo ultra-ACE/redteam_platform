@@ -315,14 +315,17 @@ class TaskExecutionService(BaseService):
         if template is None:
             return prompt
         template_text = template.template_text
-        # 模板漏写 {prompt} 时把原始问题补在末尾，避免只把模板本身发给模型
-        if "{prompt}" not in template_text:
-            template_text = f"{template_text.rstrip()}\n\n{{prompt}}"
-        return (
-            template_text
-            .replace("{prompt}", prompt)
-            .replace("{system_prompt}", test_case.system_prompt or "")
+        # 官方模板可能用 {0}/{seed}/{behavior}，也可能没有占位符
+        has_placeholder = any(
+            token in template_text for token in ("{prompt}", "{0}", "{seed}", "{behavior}")
         )
+        for alias in ("{0}", "{seed}", "{behavior}"):
+            template_text = template_text.replace(alias, prompt)
+        # 模板漏写占位符时把原始问题补在末尾，避免只把模板本身发给模型
+        template_text = template_text.replace("{prompt}", prompt)
+        if not has_placeholder:
+            template_text = f"{template_text.rstrip()}\n\n{prompt}"
+        return template_text.replace("{system_prompt}", test_case.system_prompt or "")
 
     def _fail_before_attempt(self, task: EvaluationTask, task_case: TaskCase, code: str, message: str) -> int:
         now = _now()
