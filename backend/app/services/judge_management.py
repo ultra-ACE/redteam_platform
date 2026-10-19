@@ -25,10 +25,12 @@ class JudgeManagementService(BaseService):
         )
 
     def create_profile(self, payload: Any) -> JudgeProfile:
+        judge_type = payload.judge_type.value if hasattr(payload.judge_type, "value") else payload.judge_type
         profile = JudgeProfile(
             name=payload.name,
-            judge_type=payload.judge_type.value if hasattr(payload.judge_type, "value") else payload.judge_type,
-            judge_model_id=payload.judge_model_id,
+            judge_type=judge_type,
+            # 规则 Judge 不依赖模型，避免数据库里残留无意义的模型绑定
+            judge_model_id=None if judge_type == "rule" else payload.judge_model_id,
             strategy=payload.strategy,
             prompt_template=payload.prompt_template,
             params=payload.params,
@@ -50,6 +52,8 @@ class JudgeManagementService(BaseService):
         judge_type = getattr(payload, "judge_type", None)
         if judge_type is not None:
             profile.judge_type = judge_type.value if hasattr(judge_type, "value") else judge_type
+        if profile.judge_type == "rule":
+            profile.judge_model_id = None
         self.uow.session.flush()
         return profile
 

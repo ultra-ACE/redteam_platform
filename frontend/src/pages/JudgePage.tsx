@@ -48,9 +48,22 @@ export function JudgePage() {
       form.setFieldsValue({ ...editingProfile, params_json: JSON.stringify(editingProfile.params ?? {}, null, 2) });
     } else {
       form.resetFields();
-      form.setFieldsValue({ judge_type: 'rule', strategy: 'rule_assisted', enabled: true, params_json: '{}' });
+      form.setFieldsValue({
+        judge_type: 'rule',
+        judge_model_id: undefined,
+        strategy: 'rule_assisted',
+        enabled: true,
+        params_json: '{}',
+      });
     }
   }, [editingProfile, form]);
+
+  // 规则 Judge 不依赖模型，切换过去时把残留的模型选择清掉
+  useEffect(() => {
+    if (judgeType === 'rule') {
+      form.setFieldValue('judge_model_id', undefined);
+    }
+  }, [judgeType, form]);
 
   const saveMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) => {
@@ -194,9 +207,22 @@ export function JudgePage() {
           <Form.Item name="judge_type" label="Judge 类型" rules={[{ required: true }]}>
             <Select options={[{ value: 'rule', label: '规则 Judge' }, { value: 'model', label: '模型 Judge' }, { value: 'ensemble', label: '集成 Judge' }]} />
           </Form.Item>
-          <Form.Item name="judge_model_id" label="Judge 模型">
-            <Select allowClear options={judgeModels.map((item) => ({ value: item.model_id, label: `${item.name} · ${item.model_name}` }))} placeholder="规则 Judge 可以不选" />
-          </Form.Item>
+          {judgeType !== 'rule' ? (
+            <Form.Item
+              name="judge_model_id"
+              label="Judge 模型"
+              rules={judgeType === 'model' ? [{ required: true, message: '模型 Judge 必须选择一个模型' }] : []}
+              extra={judgeType === 'model' ? '模型 Judge 必须指定模型；可以点击右侧清除后重新选择。' : '集成 Judge 可以不选模型，由任务里勾选的多个 Judge 共同评价。'}
+            >
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={judgeModels.map((item) => ({ value: item.model_id, label: `${item.name} · ${item.model_name}` }))}
+                placeholder="选择 Judge 模型"
+              />
+            </Form.Item>
+          ) : null}
           <Form.Item
             name="strategy"
             label="评价策略"
