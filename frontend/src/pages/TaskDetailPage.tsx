@@ -7,10 +7,12 @@ import {
   PlayCircleOutlined,
   RedoOutlined,
   ReloadOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
-import { Button, Card, Col, Descriptions, Flex, Progress, Row, Space, Spin, Table, Tag, message } from 'antd';
+import { Button, Card, Col, Descriptions, Flex, Popconfirm, Progress, Row, Space, Spin, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  cancelTask,
   getTaskEventsUrl,
   getTaskResults,
   getTaskStatistics,
@@ -94,6 +96,16 @@ export function TaskDetailPage() {
     onError: (error: Error) => message.error(error.message),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: () => cancelTask(id),
+    onSuccess: () => {
+      message.success('任务已取消');
+      queryClient.invalidateQueries({ queryKey: ['task-status', id] });
+      setStreamVersion((value) => value + 1);
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
   useEffect(() => {
     if (!id) return undefined;
 
@@ -138,6 +150,7 @@ export function TaskDetailPage() {
   const stats = statsQuery.data;
   const canPause = status?.status === 'running' || status?.status === 'queued';
   const canResume = status?.status === 'paused';
+  const canCancel = status && ['running', 'queued', 'paused'].includes(status.status);
 
   return (
     <div className="page-stack">
@@ -163,6 +176,20 @@ export function TaskDetailPage() {
               <Button icon={<RedoOutlined />} loading={retryMutation.isPending} onClick={() => retryMutation.mutate()}>
                 重试失败用例
               </Button>
+            ) : null}
+            {canCancel ? (
+              <Popconfirm
+                title="确定要取消任务吗？"
+                description="取消后不可恢复。"
+                onConfirm={() => cancelMutation.mutate()}
+                okText="确定"
+                cancelText="返回"
+                okButtonProps={{ danger: true }}
+              >
+                <Button danger icon={<StopOutlined />} loading={cancelMutation.isPending}>
+                  取消任务
+                </Button>
+              </Popconfirm>
             ) : null}
             <Button icon={<ReloadOutlined />} onClick={() => { statusQuery.refetch(); resultsQuery.refetch(); statsQuery.refetch(); }}>
               刷新
