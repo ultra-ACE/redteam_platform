@@ -55,6 +55,7 @@ class AttackTemplateService(BaseService):
 
     def create_template(self, payload: Any) -> AttackTemplate:
         method_code = payload.method_code.value if hasattr(payload.method_code, "value") else payload.method_code
+        self._ensure_prompt_placeholder(payload.template_text)
         self._ensure_unique_version(method_code, payload.name, payload.version)
         validation = self.validate_template(payload.template_text, payload.variables)
         if validation.undeclared_variables:
@@ -75,6 +76,7 @@ class AttackTemplateService(BaseService):
             return None
         template_text = payload.template_text if payload.template_text is not None else template.template_text
         variables = payload.variables if payload.variables is not None else (template.variables or [])
+        self._ensure_prompt_placeholder(template_text)
         validation = self.validate_template(template_text, variables)
         if validation.undeclared_variables:
             raise ValueError(f"undeclared variables: {', '.join(validation.undeclared_variables)}")
@@ -110,6 +112,7 @@ class AttackTemplateService(BaseService):
             return None
         template_text = payload.template_text if payload.template_text is not None else base.template_text
         variables = payload.variables if payload.variables is not None else (base.variables or [])
+        self._ensure_prompt_placeholder(template_text)
         self._ensure_unique_version(base.method_code, base.name, payload.version)
         validation = self.validate_template(template_text, variables)
         if validation.undeclared_variables:
@@ -139,7 +142,8 @@ class AttackTemplateService(BaseService):
         declared_set = set(item for item in declared_variables if item)
         detected_set = set(detected)
         return AttackTemplateValidationResult(
-            valid=not (detected_set - declared_set),
+            # 没有 {prompt} 的模板不会把真实问题发给模型
+            valid=not (detected_set - declared_set) and "prompt" in detected_set,
             detected_variables=sorted(detected_set),
             missing_variables=[],
             unused_variables=sorted(declared_set - detected_set),
@@ -198,3 +202,8 @@ class AttackTemplateService(BaseService):
         )
         if existing:
             raise ValueError(f"attack template version already exists: {name}/{version}")
+
+    @staticmethod
+    def _ensure_prompt_placeholder(template_text: str) -> None:
+        if "{prompt}" not in template_text:
+            raise ValueError("模板必须包含 {prompt} 占位符，否则被测模型收不到真实问题")

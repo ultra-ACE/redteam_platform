@@ -314,8 +314,12 @@ class TaskExecutionService(BaseService):
         template = self.uow.attack_templates.get(task_case.attack_template_id)
         if template is None:
             return prompt
+        template_text = template.template_text
+        # 模板漏写 {prompt} 时把原始问题补在末尾，避免只把模板本身发给模型
+        if "{prompt}" not in template_text:
+            template_text = f"{template_text.rstrip()}\n\n{{prompt}}"
         return (
-            template.template_text
+            template_text
             .replace("{prompt}", prompt)
             .replace("{system_prompt}", test_case.system_prompt or "")
         )
