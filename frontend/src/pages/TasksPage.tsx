@@ -7,11 +7,13 @@ import {
   PlusOutlined,
   RedoOutlined,
   ReloadOutlined,
+  StopOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import { Button, Form, Input, InputNumber, Modal, Progress, Select, Space, Table, message } from 'antd';
+import { Button, Form, Input, InputNumber, Modal, Popconfirm, Progress, Select, Space, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  cancelTask,
   createTask,
   listAttackTemplates,
   listBenchmarkVersions,
@@ -100,8 +102,18 @@ export function TasksPage() {
     onError: (error: Error) => message.error(error.message),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: cancelTask,
+    onSuccess: () => {
+      message.success('任务已取消');
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
   const canPause = (status: string) => status === 'running' || status === 'queued';
   const canResume = (status: string) => status === 'paused';
+  const canCancel = (status: string) => ['running', 'queued', 'paused'].includes(status);
 
   return (
     <div className="page-stack">
@@ -140,7 +152,7 @@ export function TasksPage() {
           { title: '创建时间', dataIndex: 'created_at', render: formatDateTime },
           {
             title: '操作',
-            width: 300,
+            width: 340,
             render: (_, record) => (
               <Space wrap>
                 <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/tasks/${record.task_id}`)}>
@@ -185,6 +197,20 @@ export function TasksPage() {
                   >
                     重试失败
                   </Button>
+                ) : null}
+                {canCancel(record.status) ? (
+                  <Popconfirm
+                    title="确定要取消该任务吗？"
+                    description="取消后无法恢复，已跑的用例将保留。"
+                    onConfirm={() => cancelMutation.mutate(record.task_id)}
+                    okText="确定"
+                    cancelText="再想想"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button type="link" danger icon={<StopOutlined />} loading={cancelMutation.isPending}>
+                      取消
+                    </Button>
+                  </Popconfirm>
                 ) : null}
               </Space>
             ),
