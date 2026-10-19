@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { EyeOutlined, PlusOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { Alert, Button, Col, Descriptions, Form, Input, List, Modal, Row, Select, Space, Table, Tag, message } from 'antd';
+import { Alert, Button, Col, Descriptions, Form, Input, List, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createAttackTemplate,
@@ -24,7 +24,7 @@ const FIXED_ATTACK_METHODS = [
   { code: 'refusal_suppression', name: '拒答抑制' },
 ];
 
-// 预设模板字典（包含模板名称的提示词、内容、变量）
+// 预设模板字典
 const DEFAULT_TEMPLATES: Record<string, { text: string; variables: string[]; nameHint: string }> = {
   direct_request: {
     text: '{prompt}',
@@ -69,7 +69,6 @@ export function AttackTemplatesPage() {
   const currentMethod = Form.useWatch('method_code', templateForm) || 'direct_request';
   const currentPreset = DEFAULT_TEMPLATES[currentMethod as keyof typeof DEFAULT_TEMPLATES] || DEFAULT_TEMPLATES.direct_request;
 
-  // 核心逻辑：监听下拉框切换，直接把默认内容填进输入框里！
   useEffect(() => {
     if (!editingTemplate && currentMethod) {
       const preset = DEFAULT_TEMPLATES[currentMethod as keyof typeof DEFAULT_TEMPLATES];
@@ -87,7 +86,6 @@ export function AttackTemplatesPage() {
       templateForm.setFieldsValue(editingTemplate);
     } else {
       templateForm.resetFields();
-      // 默认选中直接请求，并直接填入对应内容
       templateForm.setFieldsValue({
         method_code: 'direct_request',
         version: 'v1',
@@ -115,7 +113,15 @@ export function AttackTemplatesPage() {
       setEditingTemplate(null);
       queryClient.invalidateQueries({ queryKey: ['attack-templates'] });
     },
-    onError: (error: Error) => message.error(error.message),
+    onError: (error: any) => {
+      // 专门处理重名冲突和其他错误
+      const detail = error.response?.data?.detail || error.message;
+      if (detail && detail.includes('already exists')) {
+        message.error('创建失败：该模板名称和版本已经存在，请修改名称或版本号。');
+      } else {
+        message.error(`操作失败：${detail}`);
+      }
+    },
   });
 
   const previewMutation = useMutation({
@@ -147,7 +153,9 @@ export function AttackTemplatesPage() {
   });
 
   const methods = FIXED_ATTACK_METHODS;
-  const templates = templatesQuery.data?.items ?? [];
+
+  // 过滤掉状态为 disabled 的数据，实现“视觉消失”
+  const templates = (templatesQuery.data?.items ?? []).filter(item => item.status !== 'disabled');
   const versions = versionsQuery.data ?? [];
 
   const openPreview = (template: AttackTemplate) => {
@@ -221,14 +229,24 @@ export function AttackTemplatesPage() {
                     版本
                   </Button>
                   <Button type="link" onClick={() => { setEditingTemplate(record); setTemplateOpen(true); }}>编辑</Button>
-                  <Button
-                    type="link"
-                    danger
-                    disabled={record.status === 'disabled'}
-                    onClick={() => disableAttackTemplate(record.attack_template_id).then(() => queryClient.invalidateQueries({ queryKey: ['attack-templates'] }))}
+
+                  {/* 删除按钮：二次确认 */}
+                  <Popconfirm
+                    title="确认删除"
+                    description="确定要删除这个攻击模板吗？"
+                    onConfirm={() => {
+                      disableAttackTemplate(record.attack_template_id).then(() => {
+                        message.success('删除成功');
+                        queryClient.invalidateQueries({ queryKey: ['attack-templates'] });
+                      });
+                    }}
+                    okText="确定"
+                    cancelText="取消"
                   >
-                    停用
-                  </Button>
+                    <Button type="link" danger>
+                      删除
+                    </Button>
+                  </Popconfirm>
                 </Space>
               ),
             },
@@ -255,7 +273,6 @@ export function AttackTemplatesPage() {
           </Form.Item>
 
           <Form.Item name="name" label="模板名称" rules={[{ required: true }]}>
-            {/* 这里的 placeholder 换成了动态的 currentPreset.nameHint */}
             <Input placeholder={currentPreset.nameHint} />
           </Form.Item>
 
@@ -263,7 +280,7 @@ export function AttackTemplatesPage() {
             <Input disabled={Boolean(editingTemplate)} />
           </Form.Item>
 
-          {/* 直接请求时不显示下面的内容，但表单里已经默认填好了值 */}
+          {/* 直接请求时不显示下面的内容，表单里已默认填好值 */}
           {currentMethod !== 'direct_request' && (
             <>
               <Form.Item
@@ -300,11 +317,7 @@ export function AttackTemplatesPage() {
       >
         {previewResult ? (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Alert
-              type={previewResult.valid ? 'success' : 'warning'}
-              showIcon
-              message={previewResult.valid ? '变量校验通过' : '变量校验存在问题'}
-            />
+            <Alert type={previewResult.valid ? 'success' : 'warning'} showIcon message={previewResult.valid ? '变量校验通过' : '变量校验存在问题'} />
             <Descriptions column={1} size="small">
               <Descriptions.Item label="检测到的变量">{previewResult.detected_variables.join(', ') || '无'}</Descriptions.Item>
             </Descriptions>
