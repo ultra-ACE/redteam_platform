@@ -33,6 +33,8 @@ def load_jailbreaks(path: Path) -> list[str]:
 
 
 def normalize(text: str) -> str:
+    # 源文件里部分 emoji 以孤立代理字符保存，写 UTF-8 前需要剔除
+    text = "".join(ch for ch in text if not 0xD800 <= ord(ch) <= 0xDFFF)
     normalized = text.replace("{0}", "{prompt}").replace("{seed}", "{prompt}")
     if "{prompt}" not in normalized:
         normalized = f"{normalized.rstrip()}\n\n{{prompt}}"
