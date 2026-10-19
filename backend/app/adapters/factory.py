@@ -12,11 +12,15 @@ from app.db.models import ModelRegistry
 def resolve_secret_ref(secret_ref: str | None) -> str | None:
     if not secret_ref:
         return None
-    if secret_ref.startswith("env:"):
-        return os.getenv(secret_ref.removeprefix("env:"))
-    if secret_ref.startswith("literal:"):
-        return secret_ref.removeprefix("literal:")
-    return None
+    text = secret_ref.strip()
+    if not text:
+        return None
+    if text.startswith("env:"):
+        return os.getenv(text.removeprefix("env:"))
+    if text.startswith("literal:"):
+        return text.removeprefix("literal:")
+    # 历史数据里可能直接存了明文密钥，按 literal 处理，避免静默丢鉴权
+    return text
 
 
 def build_adapter(model: ModelRegistry) -> ModelAdapter:
