@@ -14,6 +14,7 @@ import {
   Select,
   Space,
   Table,
+  Tabs,
   Tag,
   Upload,
   message,
@@ -30,6 +31,7 @@ import {
   listTestCases,
 } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
+import { AttackTemplatesPage as AttackTemplatesTab } from './AttackTemplatesPage';
 import type { Benchmark, BenchmarkImportResult, BenchmarkVersion } from '../types/api';
 import { formatDateTime } from '../utils/format';
 
@@ -187,32 +189,9 @@ export function BenchmarksPage() {
       .catch(() => undefined);
   };
 
-  return (
-    <div className="page-stack">
-      <PageHeader
-        title="Benchmark 管理"
-        description="支持 HarmBench、AdvBench、TDC2023、中文数据集的原始文件直接导入，自动识别数据集结构并保留原始标签。"
-        extra={
-          <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => benchmarksQuery.refetch()}>
-              刷新
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setImportResults([]);
-                setFileList([]);
-                form.resetFields();
-                setImportOpen(true);
-              }}
-            >
-              导入 Benchmark
-            </Button>
-          </Space>
-        }
-      />
-
+  // --- 种子管理原本的核心内容 ---
+  const seedContent = (
+    <>
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={8}>
           <Card className="section-card" title="Benchmark 列表">
@@ -320,13 +299,14 @@ export function BenchmarksPage() {
       {selectedVersion ? (
         <Card
           className="section-card"
+          style={{ marginTop: 16 }}
           title={`测试用例 · 版本 ${selectedVersion.version}`}
           extra={
             <Space>
               <Input
                 allowClear
                 prefix={<SearchOutlined />}
-              placeholder="按来源编号 / 提示词 / 标签搜索"
+                placeholder="按来源编号 / 提示词 / 标签搜索"
                 style={{ width: 280 }}
                 value={testCaseKeyword}
                 onChange={(event) => setTestCaseKeyword(event.target.value)}
@@ -489,6 +469,54 @@ export function BenchmarksPage() {
           </Form>
         )}
       </Modal>
+    </>
+  );
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        title="评测资产"
+        description="统一管理种子问题数据集与官方攻击 Prompt 模板。"
+        extra={
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={() => benchmarksQuery.refetch()}>
+              刷新
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setImportResults([]);
+                setFileList([]);
+                form.resetFields();
+                setImportOpen(true);
+              }}
+            >
+              导入 Benchmark
+            </Button>
+          </Space>
+        }
+      />
+
+      <Tabs
+        defaultActiveKey="1"
+        items={[
+          {
+            key: '1',
+            label: '种子问题',
+            children: <div style={{ paddingTop: 8 }}>{seedContent}</div>,
+          },
+          {
+            key: '2',
+            label: '攻击模板',
+            children: (
+              <div style={{ paddingTop: 8 }}>
+                <AttackTemplatesTab />
+              </div>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

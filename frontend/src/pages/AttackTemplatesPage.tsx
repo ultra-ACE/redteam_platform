@@ -12,7 +12,7 @@ import {
   publishAttackTemplateVersion,
   updateAttackTemplate,
 } from '../api';
-import { EmptyPanel, PageHeader } from '../components/ui';
+import { EmptyPanel } from '../components/ui'; // 去掉了 PageHeader
 
 import type { AttackTemplate, AttackTemplatePreviewResult } from '../types/api';
 
@@ -173,30 +173,27 @@ export function AttackTemplatesPage() {
   };
 
   return (
-    <div className="page-stack">
-      <PageHeader
-        title="攻击方法与模板"
-        description="攻击方式固定为四种，只维护 Prompt 模板、变量校验、预览和版本发布。"
-        extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditingTemplate(null);
-              setTemplateOpen(true);
-            }}
-          >
-            新建攻击模板
-          </Button>
-        }
-      />
-
-      <Alert
-        type="info"
-        showIcon
-        message="固定攻击方式"
-        description={methods.map((item) => `${item.name}（${item.code}）`).join(' · ')}
-      />
+    <div>
+      {/* 顶部操作区：左侧提示信息，右侧新建按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Alert
+          type="info"
+          showIcon
+          message="固定攻击方式"
+          description={methods.map((item) => `${item.name}（${item.code}）`).join(' · ')}
+          style={{ flex: 1, marginRight: 16 }}
+        />
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            setEditingTemplate(null);
+            setTemplateOpen(true);
+          }}
+        >
+          新建攻击模板
+        </Button>
+      </div>
 
       {templates.length ? (
         <Table<AttackTemplate>
@@ -230,7 +227,6 @@ export function AttackTemplatesPage() {
                   </Button>
                   <Button type="link" onClick={() => { setEditingTemplate(record); setTemplateOpen(true); }}>编辑</Button>
 
-                  {/* 删除按钮：二次确认 */}
                   <Popconfirm
                     title="确认删除"
                     description="确定要删除这个攻击模板吗？"
@@ -280,7 +276,6 @@ export function AttackTemplatesPage() {
             <Input disabled={Boolean(editingTemplate)} />
           </Form.Item>
 
-          {/* 直接请求时不显示下面的内容，表单里已默认填好值 */}
           {currentMethod !== 'direct_request' && (
             <>
               <Form.Item
