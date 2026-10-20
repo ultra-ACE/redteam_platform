@@ -188,6 +188,8 @@ class ModelService(BaseService):
 
 class TaskService(BaseService):
     def create_task(self, payload: Any, created_by: str = "local") -> EvaluationTask:
+        seed_ids = list(dict.fromkeys(payload.seed_test_case_ids or []))
+        self._validate_seed_ids(seed_ids)
         task = EvaluationTask(
             name=payload.name,
             benchmark_version_id=payload.benchmark_version_id,
@@ -209,6 +211,18 @@ class TaskService(BaseService):
                 )
             )
         return task
+
+    def _validate_seed_ids(self, seed_ids: list[int]) -> None:
+        """种子必须存在且处于启用状态，避免任务创建后才发现无效。"""
+        missing = [
+            seed_id
+            for seed_id in seed_ids
+            if (test_case := self.uow.test_cases.get(seed_id)) is None
+            or test_case.status != "active"
+        ]
+        if missing:
+            preview = ", ".join(str(item) for item in missing[:10])
+            raise ValueError(f"种子不存在或已停用: {preview}")
 
     def list_tasks(self, page: int, page_size: int, status: str | None = None):
         return self.uow.evaluation_tasks.list(page=page, page_size=page_size, status=status)

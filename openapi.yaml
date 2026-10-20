@@ -3137,7 +3137,9 @@ components:
           type: string
           title: Name
         benchmark_version_id:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Benchmark Version Id
         status:
           $ref: '#/components/schemas/TaskStatus'
@@ -3195,7 +3197,6 @@ components:
       required:
       - task_id
       - name
-      - benchmark_version_id
       - status
       title: EvaluationTask
     EvaluationTaskCreateRequest:
@@ -3204,8 +3205,15 @@ components:
           type: string
           title: Name
         benchmark_version_id:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Benchmark Version Id
+        seed_test_case_ids:
+          items:
+            type: integer
+          type: array
+          title: Seed Test Case Ids
         model_bindings:
           items:
             $ref: '#/components/schemas/ModelBinding'
@@ -3235,7 +3243,6 @@ components:
       type: object
       required:
       - name
-      - benchmark_version_id
       - model_bindings
       - judge_profile_ids
       - rule_set_ids

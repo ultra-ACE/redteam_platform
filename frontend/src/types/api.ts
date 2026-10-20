@@ -106,7 +106,7 @@ export type RetryFailedData = {
 export type EvaluationTask = {
   task_id: number;
   name: string;
-  benchmark_version_id: number;
+  benchmark_version_id?: number | null;
   status: string;
   progress: number;
   total_cases: number;

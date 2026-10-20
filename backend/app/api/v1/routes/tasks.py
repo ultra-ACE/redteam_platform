@@ -50,7 +50,10 @@ async def create_evaluation_task(
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
     service = TaskService(uow)
-    task = service.create_task(payload, created_by=operator)
+    try:
+        task = service.create_task(payload, created_by=operator)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     uow.commit()
     enqueue_task(task.id)
     return ok(EvaluationTask.model_validate(task).model_dump())

@@ -38,12 +38,25 @@ class TaskExecutionService(BaseService):
             self.uow.session.flush()
             return []
 
-        test_cases = self.uow.test_cases.list(
-            page=1,
-            page_size=100000,
-            benchmark_version_id=task.benchmark_version_id,
-            status="active",
-        )
+        task_config = task.config or {}
+        seed_ids = list(dict.fromkeys(task_config.get("seed_test_case_ids") or []))
+        if seed_ids:
+            # 新任务：直接按选中的种子展开，可跨 Benchmark 混选
+            test_cases = []
+            for seed_id in seed_ids:
+                test_case = self.uow.test_cases.get(seed_id)
+                if test_case is not None and test_case.status == "active":
+                    test_cases.append(test_case)
+        elif task.benchmark_version_id is not None:
+            # 旧任务：回退到版本下的全部用例
+            test_cases = self.uow.test_cases.list(
+                page=1,
+                page_size=100000,
+                benchmark_version_id=task.benchmark_version_id,
+                status="active",
+            )
+        else:
+            test_cases = []
         if not test_cases:
             task.status = "failed"
             task.error_message = "no active test cases"

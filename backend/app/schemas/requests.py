@@ -1,6 +1,6 @@
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .enums import (
     AttackMethodCode,
@@ -105,13 +105,21 @@ class ModelBinding(BaseModel):
 
 class EvaluationTaskCreateRequest(BaseModel):
     name: str
-    benchmark_version_id: int
+    # 旧任务仍可传版本；新任务改为直接选种子
+    benchmark_version_id: int | None = None
+    seed_test_case_ids: list[int] = Field(default_factory=list)
     model_bindings: list[ModelBinding]
     attack_template_ids: list[int] = Field(default_factory=list)
     judge_profile_ids: list[int]
     rule_set_ids: list[int]
     execution: ExecutionConfig
     priority: str = "normal"
+
+    @model_validator(mode="after")
+    def _require_seed_source(self) -> "EvaluationTaskCreateRequest":
+        if not self.seed_test_case_ids and self.benchmark_version_id is None:
+            raise ValueError("seed_test_case_ids 与 benchmark_version_id 至少提供一个")
+        return self
 
 
 class JudgeProfileCreateRequest(BaseModel):
