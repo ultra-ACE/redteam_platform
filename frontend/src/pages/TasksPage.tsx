@@ -16,11 +16,10 @@ import {
   cancelTask,
   createTask,
   listAttackTemplates,
-  listBenchmarkVersions,
-  listBenchmarks,
   listJudgeProfiles,
   listModels,
   listTasks,
+  listTestCases, // 新增：用于拉取种子问题列表
   pauseTask,
   resumeTask,
   retryFailedTask,
@@ -35,16 +34,16 @@ export function TasksPage() {
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
-  const benchmarkId = Form.useWatch('benchmark_id', form);
 
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks({ page_size: 200 }) });
   const modelsQuery = useQuery({ queryKey: ['models', 'tasks'], queryFn: () => listModels({ page_size: 200 }) });
-  const benchmarksQuery = useQuery({ queryKey: ['benchmarks', 'tasks'], queryFn: () => listBenchmarks({ page_size: 200 }) });
-  const versionsQuery = useQuery({
-    queryKey: ['benchmark-versions', benchmarkId],
-    queryFn: () => listBenchmarkVersions(benchmarkId),
-    enabled: Boolean(benchmarkId),
+
+  // 新增：拉取种子问题列表（暂时拉取前 200 条，后续等 T5 做搜索接口再优化）
+  const testCasesQuery = useQuery({
+    queryKey: ['test-cases', 'tasks'],
+    queryFn: () => listTestCases({ page_size: 200 }),
   });
+
   const templatesQuery = useQuery({
     queryKey: ['attack-templates', 'tasks'],
     queryFn: () => listAttackTemplates({ page_size: 200 }),
@@ -119,7 +118,7 @@ export function TasksPage() {
     <div className="page-stack">
       <PageHeader
         title="评测任务"
-        description="选择 Benchmark、被测模型、Judge 和规则集，创建越狱安全评测任务，并支持暂停/继续/断点续跑。"
+        description="选择种子问题、被测模型、Judge 和规则集，创建越狱安全评测任务，并支持暂停/继续/断点续跑。"
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => tasksQuery.refetch()}>
@@ -237,25 +236,29 @@ export function TasksPage() {
             concurrency: 2,
           }}
           onFinish={(values) => {
+            // 🚨 强行绕过前端类型检查，因为组长还没改 types/api.ts
+            const payload = values as any;
+
             createMutation.mutate({
-              name: values.name,
-              benchmark_version_id: values.benchmark_version_id,
-              model_bindings: (values.model_ids ?? []).map((modelId: number) => ({
+              name: payload.name,
+              // 核心修改：使用 seed_test_case_ids 替换 benchmark_version_id
+              seed_test_case_ids: payload.seed_test_case_ids,
+              model_bindings: (payload.model_ids ?? []).map((modelId: number) => ({
                 model_id: modelId,
                 role: 'target',
                 model_params: {
-                  temperature: values.temperature ?? 0.2,
-                  max_tokens: values.max_tokens ?? 1024,
+                  temperature: payload.temperature ?? 0.2,
+                  max_tokens: payload.max_tokens ?? 1024,
                 },
               })),
-              attack_template_ids: values.attack_template_ids ?? [],
-              judge_profile_ids: values.judge_profile_ids ?? [],
+              attack_template_ids: payload.attack_template_ids ?? [],
+              judge_profile_ids: payload.judge_profile_ids ?? [],
               rule_set_ids: [],
               execution: {
-                repeat: values.repeat,
-                timeout_seconds: values.timeout_seconds,
+                repeat: payload.repeat,
+                timeout_seconds: payload.timeout_seconds,
                 retry: { max_attempts: 1, backoff_seconds: 3 },
-                concurrency: values.concurrency,
+                concurrency: payload.concurrency,
               },
             });
           }}
@@ -263,25 +266,25 @@ export function TasksPage() {
           <Form.Item name="name" label="任务名称" rules={[{ required: true }]}>
             <Input placeholder="例如：Qwen2.5-7B 越狱基线评测" />
           </Form.Item>
-          <Form.Item name="benchmark_id" label="Benchmark" rules={[{ required: true }]}>
+
+          {/* 核心修改：把原来的 Benchmark 换成了种子问题多选 */}
+          <Form.Item
+            name="seed_test_case_ids"
+            label="种子问题"
+            rules={[{ required: true, type: 'array', min: 1, message: '请至少选择一个种子问题' }]}
+          >
             <Select
-              placeholder="选择 Benchmark"
-              options={(benchmarksQuery.data?.items ?? []).map((item) => ({
-                value: item.benchmark_id,
-                label: `${item.name}（${item.slug}）`,
+              mode="multiple"
+              placeholder="选择一个或多个种子问题"
+              loading={testCasesQuery.isLoading}
+              // 截取前 50 个字符展示，避免下拉框太宽
+              options={(testCasesQuery.data?.items ?? []).map((item) => ({
+                value: item.test_case_id,
+                label: `[${item.test_case_id}] ${item.prompt.slice(0, 50)}...`,
               }))}
             />
           </Form.Item>
-          <Form.Item name="benchmark_version_id" label="Benchmark 版本" rules={[{ required: true }]}>
-            <Select
-              placeholder="选择版本"
-              loading={versionsQuery.isLoading}
-              options={(versionsQuery.data?.items ?? []).map((item) => ({
-                value: item.benchmark_version_id,
-                label: `${item.version} · ${item.case_count} 条用例`,
-              }))}
-            />
-          </Form.Item>
+
           <Form.Item
             name="model_ids"
             label="被测模型"
