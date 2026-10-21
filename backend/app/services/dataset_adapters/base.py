@@ -9,6 +9,7 @@
 
 这样"异构适配"发生在系统内部，后续的标准化评测只面对同一种数据结构。
 """
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -192,6 +193,17 @@ def safe_external_id(
     if len(text) > max_length:
         return fallback, text
     return text, None
+
+
+def content_external_id(
+    prompt: Any,
+    system_prompt: Any = None,
+    *,
+    prefix: str = "case",
+) -> str:
+    """为没有来源编号的数据生成稳定 ID，避免不同文件按行号互相撞号。"""
+    content = f"{system_prompt or ''}\n{prompt or ''}".encode("utf-8")
+    return f"{prefix}-{hashlib.sha256(content).hexdigest()[:16]}"
 
 
 @dataclass

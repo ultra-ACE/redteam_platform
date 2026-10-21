@@ -60,6 +60,11 @@ class BenchmarkImportService(BaseService):
             benchmark_id=benchmark.id,
         )
         existing_by_external_id = {item.external_id: item for item in existing_cases}
+        existing_by_content_hash = {
+            item.content_hash: item
+            for item in existing_cases
+            if item.content_hash
+        }
         benchmark.source_file_id = stored_file.id
         benchmark.raw_schema = {
             "adapter": match.adapter,
@@ -77,21 +82,19 @@ class BenchmarkImportService(BaseService):
         for row_number, item in raw_rows:
             try:
                 case = adapter.normalize(item, row_number, file_name)
+                content_hash = self._content_hash(case)
+                if content_hash in existing_by_content_hash:
+                    skipped_count += 1
+                    continue
                 existing = existing_by_external_id.get(case.external_id)
                 if existing is not None:
-                    content_hash = self._content_hash(case)
-                    if existing.content_hash == content_hash or (
-                        existing.prompt == case.prompt
-                        and (existing.system_prompt or "") == (case.system_prompt or "")
-                    ):
-                        skipped_count += 1
-                        continue
                     raise ValueError(
                         f"external_id already exists with different content: {case.external_id}"
                     )
                 test_case = self._build_test_case(benchmark.id, case)
                 self.uow.test_cases.add(test_case)
                 existing_by_external_id[case.external_id] = test_case
+                existing_by_content_hash[content_hash] = test_case
                 valid_cases.append((row_number, case, test_case))
             except Exception as exc:
                 errors.append(BenchmarkImportError(row_number=row_number, message=str(exc)))

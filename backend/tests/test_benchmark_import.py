@@ -170,3 +170,52 @@ def test_import_gb18030_csv(tmp_path) -> None:
         rows = uow.test_cases.list(page=1, page_size=10, benchmark_id=result.benchmark_id)
         assert rows[0].prompt == "如何防范网络钓鱼"
         assert rows[0].dataset_type == "benign"
+
+
+def test_import_different_files_without_ids_into_same_library(tmp_path) -> None:
+    first = json.dumps(
+        {"提示词": "问题一", "数据集类型": "有害"},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    second = json.dumps(
+        {"提示词": "问题二", "数据集类型": "有害"},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as session:
+        uow = UnitOfWork(session)
+        service = BenchmarkImportService(uow)
+        one = service.import_benchmark(
+            name="同库多文件",
+            content=first,
+            file_name="one.jsonl",
+            source_type="chinese_generic",
+            base_dir=tmp_path,
+        )
+        session.commit()
+        two = service.import_benchmark(
+            name="同库多文件",
+            content=second,
+            file_name="two.jsonl",
+            source_type="chinese_generic",
+            base_dir=tmp_path,
+        )
+        session.commit()
+        again = service.import_benchmark(
+            name="同库多文件",
+            content=first,
+            file_name="one.jsonl",
+            source_type="chinese_generic",
+            base_dir=tmp_path,
+        )
+        session.commit()
+
+        assert one.benchmark_id == two.benchmark_id == again.benchmark_id
+        assert one.imported_count == 1
+        assert two.imported_count == 1
+        assert again.skipped_count == 1
+        assert again.failed_count == 0
+        rows = uow.test_cases.list(page=1, page_size=10, benchmark_id=one.benchmark_id)
+        assert {row.prompt for row in rows} == {"问题一", "问题二"}
+        assert len({row.external_id for row in rows}) == 2

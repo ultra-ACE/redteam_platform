@@ -9,6 +9,7 @@ from app.services.dataset_adapters.base import (
     CanonicalCase,
     DatasetAdapter,
     RowIndex,
+    content_external_id,
     split_labels,
 )
 
@@ -43,7 +44,11 @@ class GenericAdapter(DatasetAdapter):
 
         labels = split_labels(view.get("raw_label", "label", "category"))
         codes = split_labels(view.get("normalized_risk_codes", "risk_category_code"))
-        external_id = view.get("external_id", "id", "case_id") or f"case-{row_number}"
+        system_prompt = str(view.get("system_prompt")) if view.get("system_prompt") else None
+        external_id = view.get("external_id", "id", "case_id") or content_external_id(
+            prompt,
+            system_prompt,
+        )
 
         consumed = (
             "prompt", "question", "input", "text", "query", "instruction",
@@ -58,7 +63,7 @@ class GenericAdapter(DatasetAdapter):
         return CanonicalCase(
             external_id=str(external_id),
             prompt=str(prompt),
-            system_prompt=str(view.get("system_prompt")) if view.get("system_prompt") else None,
+            system_prompt=system_prompt,
             language=str(view.get("language", "lang") or "zh"),
             raw_labels=labels,
             risk_codes=codes,
