@@ -51,6 +51,7 @@ export function AttackTemplatesPage() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importFiles, setImportFiles] = useState<UploadFile[]>([]);
+  const [importLibraryName, setImportLibraryName] = useState('默认模板库');
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [editingTemplate, setEditingTemplate] = useState<AttackTemplate | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<AttackTemplate | null>(null);
@@ -77,6 +78,7 @@ export function AttackTemplatesPage() {
     }
     templateForm.resetFields();
     templateForm.setFieldsValue({
+      library_name: '默认模板库',
       version: 'v1',
       status: 'active',
       template_text: '{prompt}',
@@ -98,7 +100,7 @@ export function AttackTemplatesPage() {
     onError: (error: unknown) => {
       const detail = getErrorMessage(error);
       if (detail.includes('already exists')) {
-        message.error('创建失败：该模板名称和版本已经存在，请修改名称或版本号。');
+        message.error('创建失败：该模板库下的模板名称和版本已经存在。');
       } else {
         message.error(`操作失败：${detail}`);
       }
@@ -112,7 +114,7 @@ export function AttackTemplatesPage() {
         .filter((item): item is NonNullable<typeof item> => Boolean(item));
       if (!files.length) throw new Error('请选择模板文件');
 
-      return importTemplateFiles(files);
+      return importTemplateFiles(files, importLibraryName);
     },
     onSuccess: ({ imported, errors }) => {
       queryClient.invalidateQueries({ queryKey: ['attack-templates'] });
@@ -121,6 +123,7 @@ export function AttackTemplatesPage() {
       if (!errors.length) {
         setImportOpen(false);
         setImportFiles([]);
+        setImportLibraryName('默认模板库');
       }
     },
     onError: (error: unknown) => message.error(getErrorMessage(error)),
@@ -206,6 +209,7 @@ export function AttackTemplatesPage() {
           pagination={{ pageSize: 10 }}
           columns={[
             { title: 'ID', dataIndex: 'attack_template_id', width: 80 },
+            { title: '模板库', dataIndex: 'library_name', width: 160 },
             { title: '名称', dataIndex: 'name' },
             { title: '版本', dataIndex: 'version', width: 90, render: (value) => <Tag color="blue">{value}</Tag> },
             {
@@ -286,6 +290,13 @@ export function AttackTemplatesPage() {
           layout="vertical"
           onFinish={(values) => templateMutation.mutate(values)}
         >
+          <Form.Item
+            name="library_name"
+            label="模板库名称"
+            rules={[{ required: true, message: '请输入模板库名称' }]}
+          >
+            <Input placeholder="例如：官方越狱模板库" />
+          </Form.Item>
           <Form.Item name="name" label="模板名称" rules={[{ required: true }]}>
             <Input placeholder="例如：DAN 官方模板" />
           </Form.Item>
@@ -321,6 +332,12 @@ export function AttackTemplatesPage() {
         confirmLoading={importMutation.isPending}
       >
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <Input
+            addonBefore="模板库名称"
+            value={importLibraryName}
+            onChange={(event) => setImportLibraryName(event.target.value)}
+            placeholder="默认模板库"
+          />
           <Dragger
             multiple
             accept={TEMPLATE_IMPORT_ACCEPT}

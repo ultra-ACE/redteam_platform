@@ -55,12 +55,14 @@ class AttackTemplateService(BaseService):
 
     def create_template(self, payload: Any) -> AttackTemplate:
         method_code = payload.method_code.value if hasattr(payload.method_code, "value") else payload.method_code
+        library_name = (payload.library_name or "默认模板库").strip() or "默认模板库"
         template_text = self._normalize_template_text(payload.template_text)
-        self._ensure_unique_version(method_code, payload.name, payload.version)
+        self._ensure_unique_version(library_name, payload.name, payload.version)
         validation = self.validate_template(template_text, payload.variables)
         if validation.undeclared_variables:
             raise ValueError(f"undeclared variables: {', '.join(validation.undeclared_variables)}")
         template = AttackTemplate(
+            library_name=library_name,
             method_code=method_code,
             name=payload.name,
             template_text=template_text,
@@ -80,9 +82,11 @@ class AttackTemplateService(BaseService):
         validation = self.validate_template(template_text, variables)
         if validation.undeclared_variables:
             raise ValueError(f"undeclared variables: {', '.join(validation.undeclared_variables)}")
-        for field in ("name", "template_text", "variables", "status"):
+        for field in ("library_name", "name", "template_text", "variables", "status"):
             value = getattr(payload, field, None)
             if value is not None:
+                if field == "library_name":
+                    value = str(value).strip() or "默认模板库"
                 setattr(template, field, value)
         self.uow.session.flush()
         return template
@@ -102,7 +106,7 @@ class AttackTemplateService(BaseService):
         return self.uow.attack_templates.list(
             page=1,
             page_size=200,
-            method_code=template.method_code,
+            library_name=template.library_name,
             name=template.name,
         )
 
@@ -113,11 +117,12 @@ class AttackTemplateService(BaseService):
         template_text = payload.template_text if payload.template_text is not None else base.template_text
         variables = payload.variables if payload.variables is not None else (base.variables or [])
         template_text = self._normalize_template_text(template_text)
-        self._ensure_unique_version(base.method_code, base.name, payload.version)
+        self._ensure_unique_version(base.library_name, base.name, payload.version)
         validation = self.validate_template(template_text, variables)
         if validation.undeclared_variables:
             raise ValueError(f"undeclared variables: {', '.join(validation.undeclared_variables)}")
         version = AttackTemplate(
+            library_name=base.library_name,
             method_code=base.method_code,
             name=base.name,
             template_text=template_text,
@@ -192,11 +197,11 @@ class AttackTemplateService(BaseService):
                 detected.append(name)
         return detected
 
-    def _ensure_unique_version(self, method_code: str, name: str, version: str) -> None:
+    def _ensure_unique_version(self, library_name: str, name: str, version: str) -> None:
         existing = self.uow.attack_templates.list(
             page=1,
             page_size=1,
-            method_code=method_code,
+            library_name=library_name,
             name=name,
             version=version,
         )

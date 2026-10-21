@@ -547,7 +547,7 @@ export function TasksPage() {
               loading={templatesQuery.isLoading}
               options={(templatesQuery.data?.items ?? []).map((item) => ({
                 value: item.attack_template_id,
-                label: `${item.name} · ${item.version}`,
+                label: `${item.library_name} / ${item.name} · ${item.version}`,
               }))}
             />
           </Form.Item>

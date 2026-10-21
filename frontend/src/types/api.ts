@@ -242,6 +242,7 @@ export type AttackTemplatePreviewResult = AttackTemplateValidationResult & {
 
 export type AttackTemplate = {
   attack_template_id: number;
+  library_name: string;
   method_code: string;
   name: string;
   template_text: string;

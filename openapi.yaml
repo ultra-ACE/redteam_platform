@@ -2575,6 +2575,10 @@ components:
         attack_template_id:
           type: integer
           title: Attack Template Id
+        library_name:
+          type: string
+          title: Library Name
+          default: 默认模板库
         method_code:
           $ref: '#/components/schemas/AttackMethodCode'
         name:
@@ -2608,6 +2612,10 @@ components:
         method_code:
           $ref: '#/components/schemas/AttackMethodCode'
           default: custom
+        library_name:
+          type: string
+          title: Library Name
+          default: 默认模板库
         name:
           type: string
           title: Name
@@ -2674,6 +2682,11 @@ components:
       title: AttackTemplatePreviewResult
     AttackTemplateUpdateRequest:
       properties:
+        library_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Library Name
         name:
           anyOf:
           - type: string

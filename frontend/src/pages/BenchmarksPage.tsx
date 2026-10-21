@@ -51,6 +51,7 @@ export function BenchmarksPage() {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importResults, setImportResults] = useState<Array<BenchmarkImportResult & { file_name: string }>>([]);
   const [templateImportResult, setTemplateImportResult] = useState<TemplateImportSummary | null>(null);
+  const [templateLibraryName, setTemplateLibraryName] = useState('默认模板库');
   const [testCaseKeyword, setTestCaseKeyword] = useState('');
   const [form] = Form.useForm();
 
@@ -101,7 +102,7 @@ export function BenchmarksPage() {
   });
 
   const templateImportMutation = useMutation({
-    mutationFn: (files: File[]) => importTemplateFiles(files),
+    mutationFn: (files: File[]) => importTemplateFiles(files, templateLibraryName),
     onSuccess: (result) => {
       setTemplateImportResult(result);
       if (result.imported) {
@@ -147,6 +148,7 @@ export function BenchmarksPage() {
   const resetImport = () => {
     setImportResults([]);
     setTemplateImportResult(null);
+    setTemplateLibraryName('默认模板库');
     setFileList([]);
     form.resetFields();
   };
@@ -356,6 +358,7 @@ export function BenchmarksPage() {
               setImportTarget(value as 'seed' | 'template');
               setImportResults([]);
               setTemplateImportResult(null);
+              setTemplateLibraryName('默认模板库');
               setFileList([]);
               form.resetFields();
             }}
@@ -479,20 +482,28 @@ export function BenchmarksPage() {
             ) : null}
 
             {!hasImportResult && importTarget === 'template' ? (
-              <Dragger
-                beforeUpload={() => false}
-                multiple
-                maxCount={10}
-                fileList={fileList}
-                onChange={({ fileList: next }) => setFileList(next)}
-                accept={TEMPLATE_IMPORT_ACCEPT}
-              >
-                <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-                <p className="ant-upload-text">点击或拖拽模板文件到此处（可多选）</p>
-                <p className="ant-upload-hint">
-                  支持 JSON、JSONL、NDJSON、TXT。JSON 字段为 name、template_text、variables、version、status；TXT 每行一条模板。
-                </p>
-              </Dragger>
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <Input
+                  addonBefore="模板库名称"
+                  value={templateLibraryName}
+                  onChange={(event) => setTemplateLibraryName(event.target.value)}
+                  placeholder="默认模板库"
+                />
+                <Dragger
+                  beforeUpload={() => false}
+                  multiple
+                  maxCount={10}
+                  fileList={fileList}
+                  onChange={({ fileList: next }) => setFileList(next)}
+                  accept={TEMPLATE_IMPORT_ACCEPT}
+                >
+                  <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                  <p className="ant-upload-text">点击或拖拽模板文件到此处（可多选）</p>
+                  <p className="ant-upload-hint">
+                    支持 JSON、JSONL、NDJSON、TXT。JSON 字段为 library_name、name、template_text、variables、version、status；TXT 每行一条模板。
+                  </p>
+                </Dragger>
+              </Space>
             ) : null}
           </div>
         </div>
@@ -517,6 +528,7 @@ export function BenchmarksPage() {
                 setImportTarget('seed');
                 setImportResults([]);
                 setTemplateImportResult(null);
+                setTemplateLibraryName('默认模板库');
                 setFileList([]);
                 form.resetFields();
                 setImportOpen(true);

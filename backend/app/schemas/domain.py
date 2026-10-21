@@ -152,6 +152,7 @@ class AttackTemplate(ORMSchema):
         validation_alias=AliasChoices("attack_template_id", "id"),
         serialization_alias="attack_template_id",
     )
+    library_name: str = "默认模板库"
     method_code: AttackMethodCode
     name: str
     template_text: str

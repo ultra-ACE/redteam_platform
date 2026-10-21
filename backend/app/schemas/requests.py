@@ -47,6 +47,7 @@ class ModelUpdateRequest(BaseModel):
 
 class AttackTemplateCreateRequest(BaseModel):
     method_code: AttackMethodCode = AttackMethodCode.custom
+    library_name: str = "默认模板库"
     name: str
     template_text: str
     variables: list[str] = Field(default_factory=list)
@@ -55,6 +56,7 @@ class AttackTemplateCreateRequest(BaseModel):
 
 
 class AttackTemplateUpdateRequest(BaseModel):
+    library_name: str | None = None
     name: str | None = None
     template_text: str | None = None
     variables: list[str] | None = None

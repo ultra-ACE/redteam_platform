@@ -1,6 +1,7 @@
 import { createAttackTemplate } from '../api';
 
 export type TemplateImportDraft = {
+  library_name: string;
   name: string;
   template_text: string;
   variables: string[];
@@ -75,11 +76,13 @@ function draftFromRecord(
   record: unknown,
   baseName: string,
   index: number,
+  defaultLibraryName: string,
 ): TemplateImportDraft {
   if (typeof record === 'string') {
     const templateText = record.trim();
     if (!templateText) throw new Error('模板内容为空');
     return {
+      library_name: defaultLibraryName,
       name: `${baseName}-${index}`,
       template_text: templateText,
       variables: detectVariables(templateText),
@@ -99,6 +102,7 @@ function draftFromRecord(
   }
 
   return {
+    library_name: String(row.library_name ?? defaultLibraryName).trim() || defaultLibraryName,
     name: String(row.name ?? `${baseName}-${index}`).trim(),
     template_text: templateText.trim(),
     variables: normalizeVariables(row.variables, templateText),
@@ -109,7 +113,10 @@ function draftFromRecord(
   };
 }
 
-async function parseTemplateFile(file: File): Promise<TemplateImportDraft[]> {
+async function parseTemplateFile(
+  file: File,
+  defaultLibraryName: string,
+): Promise<TemplateImportDraft[]> {
   const content = await file.text();
   const suffix = file.name.split('.').pop()?.toLowerCase() ?? '';
   const baseName = file.name.replace(/\.[^.]+$/, '');
@@ -153,15 +160,19 @@ async function parseTemplateFile(file: File): Promise<TemplateImportDraft[]> {
   }
 
   return records.map((record, index) =>
-    draftFromRecord(record, baseName, index + 1),
+    draftFromRecord(record, baseName, index + 1, defaultLibraryName),
   );
 }
 
 export async function importTemplateFiles(
   files: File[],
+  defaultLibraryName = '默认模板库',
 ): Promise<TemplateImportSummary> {
   if (!files.length) throw new Error('请选择模板文件');
-  const drafts = (await Promise.all(files.map(parseTemplateFile))).flat();
+  const libraryName = defaultLibraryName.trim() || '默认模板库';
+  const drafts = (
+    await Promise.all(files.map((file) => parseTemplateFile(file, libraryName)))
+  ).flat();
   if (!drafts.length) throw new Error('没有可导入的模板');
 
   const errors: string[] = [];
