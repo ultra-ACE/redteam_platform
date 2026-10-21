@@ -87,11 +87,11 @@ export function AttackTemplatesPage() {
   }, [editingTemplate, templateForm]);
 
   const templateMutation = useMutation({
-    // 🌟 修复：加回了 method_code: 'custom'，解决 422 报错
+    // 🌟 修复：把 method_code: 'custom' 改成了后端允许的 'direct_request'
     mutationFn: (values: Record<string, unknown>) =>
       editingTemplate
         ? updateAttackTemplate(editingTemplate.attack_template_id, values)
-        : createAttackTemplate({ ...values, method_code: 'custom' }),
+        : createAttackTemplate({ ...values, method_code: 'direct_request' }),
     onSuccess: () => {
       message.success(editingTemplate ? '模板已更新' : '模板已创建');
       setTemplateOpen(false);
@@ -107,6 +107,19 @@ export function AttackTemplatesPage() {
       }
     },
   });
+
+  // 🌟 新增：强行在点击 OK 时抓取表单数据
+  const handleModalOk = async () => {
+    try {
+      // 强行触发校验并抓取数据
+      const values = await templateForm.validateFields();
+      console.log('🔥 强行抓取的数据:', values);
+      templateMutation.mutate(values);
+    } catch (error) {
+      console.log('❌ 表单验证不通过:', error);
+      message.error('请检查必填项是否填写完整');
+    }
+  };
 
   const importMutation = useMutation({
     mutationFn: async () => {
@@ -283,22 +296,12 @@ export function AttackTemplatesPage() {
         open={templateOpen}
         width={760}
         onCancel={() => setTemplateOpen(false)}
-        onOk={() => templateForm.submit()}
+        onOk={handleModalOk}  // 🌟 修改：使用自定义的 handleModalOk
         confirmLoading={templateMutation.isPending}
         forceRender
         destroyOnHidden
       >
-        <Form
-          form={templateForm}
-          layout="vertical"
-          onFinish={(values) => {
-            console.log('🔥 准备提交的数据:', values);
-            templateMutation.mutate(values);
-          }}
-          onFinishFailed={(errorInfo) => {
-            console.log('❌ 校验失败，缺少字段:', errorInfo);
-          }}
-        >
+        <Form form={templateForm} layout="vertical">
           <Form.Item
             name="library_name"
             label="模板库名称"
