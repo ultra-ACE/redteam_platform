@@ -108,7 +108,7 @@ export function AttackTemplatesPage() {
         : createAttackTemplate(payload);
     },
     onSuccess: () => {
-      message.success(editingTemplate ? '攻击模板已更新' : '攻击模板已创建');
+      message.success(editingTemplate ? '模板已更新' : '模板已创建');
       setTemplateOpen(false);
       setEditingTemplate(null);
       queryClient.invalidateQueries({ queryKey: ['attack-templates'] });
@@ -191,7 +191,7 @@ export function AttackTemplatesPage() {
             setTemplateOpen(true);
           }}
         >
-          新建攻击模板
+          新建模板
         </Button>
       </div>
 
@@ -229,7 +229,7 @@ export function AttackTemplatesPage() {
 
                   <Popconfirm
                     title="确认删除"
-                    description="确定要删除这个攻击模板吗？"
+                    description="确定要删除这个模板吗？"
                     onConfirm={() => {
                       disableAttackTemplate(record.attack_template_id).then(() => {
                         message.success('删除成功');
@@ -249,11 +249,11 @@ export function AttackTemplatesPage() {
           ]}
         />
       ) : (
-        <EmptyPanel title="暂无攻击模板" description="创建攻击模板并绑定固定的攻击方式。" />
+        <EmptyPanel title="暂无模板" description="创建模板并绑定固定的攻击方式。" />
       )}
 
       <Modal
-        title={editingTemplate ? '编辑攻击模板' : '新建攻击模板'}
+        title={editingTemplate ? '编辑模板' : '新建模板'}
         open={templateOpen}
         width={760}
         onCancel={() => setTemplateOpen(false)}

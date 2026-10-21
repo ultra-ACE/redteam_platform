@@ -508,7 +508,7 @@ export function BenchmarksPage() {
           },
           {
             key: '2',
-            label: '攻击模板',
+            label: '模板',
             children: (
               <div style={{ paddingTop: 8 }}>
                 <AttackTemplatesTab />

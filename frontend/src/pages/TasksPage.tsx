@@ -197,7 +197,7 @@ export function TasksPage() {
     <div className="page-stack">
       <PageHeader
         title="评测任务"
-        description="选择种子问题、攻击模板、被测模型与 Judge，创建越狱安全评测任务，并支持暂停、继续和断点续跑。"
+        description="选择种子问题、模板、被测模型与 Judge，创建越狱安全评测任务，并支持暂停、继续和断点续跑。"
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => tasksQuery.refetch()}>
@@ -451,13 +451,13 @@ export function TasksPage() {
 
           <Form.Item
             name="attack_template_ids"
-            label="攻击模板"
-            extra="不选则使用原始 Prompt 直接请求"
+            label="模板"
+            extra="模板是官方越狱 Prompt；不选则直接使用种子原文请求"
           >
             <Select
               mode="multiple"
               allowClear
-              placeholder="选择一个或多个攻击模板"
+              placeholder="选择一个或多个模板"
               loading={templatesQuery.isLoading}
               options={(templatesQuery.data?.items ?? []).map((item) => ({
                 value: item.attack_template_id,
@@ -468,7 +468,7 @@ export function TasksPage() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="strategy_type" label="攻击策略">
+              <Form.Item name="strategy_type" label="攻击方式">
                 <Select
                   options={STRATEGY_TYPES}
                   onChange={(value) => {
@@ -480,7 +480,7 @@ export function TasksPage() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="strategy_code" label="策略实现">
+              <Form.Item name="strategy_code" label="具体方式">
                 <Select
                   options={STRATEGY_CODES[strategyType ?? 'static'] ?? STRATEGY_CODES.static}
                 />
