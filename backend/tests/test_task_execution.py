@@ -1084,3 +1084,140 @@ def test_test_case_search_route_filters_keyword_and_dataset_type() -> None:
         assert combined_response["data"]["items"][0]["external_id"] == "alpha-001"
     finally:
         app.dependency_overrides.pop(get_uow, None)
+
+
+# --- T6/T7 回归：模板占位符兼容 ---------------------------------------------
+
+
+def _render_template_prompt_for_test(
+    template_text: str,
+    *,
+    prompt: str = "种子问题",
+    system_prompt: str | None = None,
+    case_config: dict | None = None,
+) -> str:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as session:
+        template = AttackTemplate(
+            method_code="direct_request",
+            name=f"render-{uuid4().hex[:8]}",
+            template_text=template_text,
+            variables=[],
+            version="v1",
+            status="active",
+        )
+        session.add(template)
+        session.commit()
+        service = TaskExecutionService(UnitOfWork(session))
+        test_case = SimpleNamespace(prompt=prompt, system_prompt=system_prompt)
+        task_case = SimpleNamespace(attack_template_id=template.id)
+        if case_config is not None:
+            task_case.case_config = case_config
+        return service._render_prompt(test_case, task_case)
+
+
+def _render_iterative_template_prompt_for_test(
+    template_text: str,
+    *,
+    attack_prompt: str = "攻击模型生成的Prompt",
+    system_prompt: str | None = None,
+) -> str:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as session:
+        template = AttackTemplate(
+            method_code="direct_request",
+            name=f"pair-render-{uuid4().hex[:8]}",
+            template_text=template_text,
+            variables=[],
+            version="v1",
+            status="active",
+        )
+        session.add(template)
+        session.commit()
+        service = TaskExecutionService(UnitOfWork(session))
+        test_case = SimpleNamespace(prompt="种子问题", system_prompt=system_prompt)
+        task_case = SimpleNamespace(attack_template_id=template.id)
+        return service._render_iterative_target_prompt(test_case, attack_prompt, task_case)
+
+
+def test_template_rendering_supports_all_legacy_placeholders() -> None:
+    assert _render_template_prompt_for_test("问题：{prompt}") == "问题：种子问题"
+    assert _render_template_prompt_for_test("Answer: {0}") == "Answer: 种子问题"
+    assert _render_template_prompt_for_test("Seed: {seed}") == "Seed: 种子问题"
+    assert _render_template_prompt_for_test("Behavior: {behavior}") == "Behavior: 种子问题"
+
+
+def test_template_rendering_appends_seed_without_placeholder() -> None:
+    rendered = _render_template_prompt_for_test("直接请求")
+    assert rendered == "直接请求\n\n种子问题"
+    assert rendered.splitlines()[-1] == "种子问题"
+
+
+def test_template_rendering_does_not_duplicate_seed_when_placeholder_exists() -> None:
+    rendered = _render_template_prompt_for_test("问题：{prompt}")
+    assert rendered == "问题：种子问题"
+    assert rendered.count("种子问题") == 1
+
+
+def test_template_rendering_replaces_system_prompt() -> None:
+    rendered = _render_template_prompt_for_test(
+        "系统：{system_prompt}\n问题：{prompt}",
+        system_prompt="你是安全助手",
+    )
+    assert rendered == "系统：你是安全助手\n问题：种子问题"
+
+
+def test_template_rendering_old_objects_default_to_static() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as session:
+        service = TaskExecutionService(UnitOfWork(session))
+        strategy = service._case_strategy(SimpleNamespace())
+        assert strategy["strategy_type"] == "static"
+        assert strategy["strategy_code"] == "static"
+
+        rendered = service._render_prompt(
+            SimpleNamespace(prompt="种子问题", system_prompt=None),
+            SimpleNamespace(attack_template_id=None),
+        )
+        assert rendered == "种子问题"
+
+
+def test_template_rendering_happens_before_strategy_transform() -> None:
+    rendered = _render_template_prompt_for_test(
+        "前缀：{prompt}",
+        case_config={
+            "strategy_type": "transform",
+            "strategy_code": "base64",
+            "strategy_config": {},
+            "strategy_enabled": True,
+        },
+    )
+    plain = "前缀：种子问题"
+    encoded = base64.b64encode(plain.encode("utf-8")).decode("ascii")
+    assert encoded in rendered
+    assert base64.b64decode(encoded).decode("utf-8") == plain
+
+
+def test_iterative_template_rendering_supports_same_placeholders() -> None:
+    assert (
+        _render_iterative_template_prompt_for_test("问题：{0}")
+        == "问题：攻击模型生成的Prompt"
+    )
+    assert (
+        _render_iterative_template_prompt_for_test("Seed: {seed}")
+        == "Seed: 攻击模型生成的Prompt"
+    )
+    assert (
+        _render_iterative_template_prompt_for_test("无占位符")
+        == "无占位符\n\n攻击模型生成的Prompt"
+    )
+    assert (
+        _render_iterative_template_prompt_for_test(
+            "系统：{system_prompt}\n{behavior}",
+            system_prompt="系统提示",
+        )
+        == "系统：系统提示\n攻击模型生成的Prompt"
+    )
