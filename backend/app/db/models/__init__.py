@@ -1,5 +1,5 @@
 from app.db.models.attack import AttackTemplate
-from app.db.models.benchmark import Benchmark, BenchmarkVersion, TestCase
+from app.db.models.benchmark import Benchmark, TestCase
 from app.db.models.judge import JudgeProfile, JudgeResult, RuleDefinition, RuleSet, RuleValidationResult
 from app.db.models.model import ModelRegistry
 from app.db.models.reporting import Report, StoredFile
@@ -9,7 +9,6 @@ from app.db.models.task import EvaluationTask, TaskAttempt, TaskCase, TaskModelB
 __all__ = [
     "AttackTemplate",
     "Benchmark",
-    "BenchmarkVersion",
     "TestCase",
     "ModelRegistry",
     "EvaluationTask",

@@ -1,7 +1,6 @@
 from app.repositories.domain import (
     AttackTemplateRepository,
     BenchmarkRepository,
-    BenchmarkVersionRepository,
     EvaluationTaskRepository,
     FileRepository,
     JudgeProfileRepository,
@@ -21,7 +20,6 @@ from app.repositories.domain import (
 __all__ = [
     "AttackTemplateRepository",
     "BenchmarkRepository",
-    "BenchmarkVersionRepository",
     "EvaluationTaskRepository",
     "FileRepository",
     "JudgeProfileRepository",

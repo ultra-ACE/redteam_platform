@@ -66,7 +66,7 @@ def test_task_pause_and_resume_contract() -> None:
     with Session(engine, expire_on_commit=False) as session:
         task = EvaluationTask(
             name="contract-task",
-            benchmark_version_id=1,
+            benchmark_id=1,
             status="running",
             total_cases=1,
             config={},

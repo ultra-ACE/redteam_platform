@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from app.repositories import (
     AttackTemplateRepository,
     BenchmarkRepository,
-    BenchmarkVersionRepository,
     EvaluationTaskRepository,
     FileRepository,
     JudgeProfileRepository,
@@ -25,7 +24,6 @@ class UnitOfWork:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.benchmarks = BenchmarkRepository(session)
-        self.benchmark_versions = BenchmarkVersionRepository(session)
         self.test_cases = TestCaseRepository(session)
         self.models = ModelRepository(session)
         self.attack_templates = AttackTemplateRepository(session)

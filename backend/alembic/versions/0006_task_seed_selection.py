@@ -36,6 +36,13 @@ def _alter_nullable(nullable: bool) -> None:
 
 
 def upgrade() -> None:
+    inspector = sa.inspect(op.get_bind())
+    columns = {column["name"] for column in inspector.get_columns("evaluation_tasks")}
+    if "benchmark_version_id" not in columns:
+        op.add_column(
+            "evaluation_tasks",
+            sa.Column("benchmark_version_id", sa.BigInteger(), nullable=True),
+        )
     _alter_nullable(True)
 
 

@@ -89,7 +89,7 @@ services:
     image: llm-eval-backend:local
     build:
       context: .
-    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=4"]
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://llm_eval:llm_eval@postgres:5432/llm_eval

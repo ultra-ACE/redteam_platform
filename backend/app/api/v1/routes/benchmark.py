@@ -1,13 +1,14 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import func, or_, select
 
 from app.api.deps import get_uow
 from app.api.utils import ok, require_local_token
+from app.db.models import TestCase as TestCaseModel
 from app.schemas import (
     ApiResponse,
     Benchmark,
-    BenchmarkVersion,
     PaginatedData,
     TestCase,
     TestCaseUpdateRequest,
@@ -26,7 +27,6 @@ router = APIRouter()
 )
 async def import_benchmark(
     name: str = Form(...),
-    version: str = Form(...),
     file: UploadFile = File(...),
     source_type: str | None = Form(default=None),
     _: None = Depends(require_local_token),
@@ -35,15 +35,10 @@ async def import_benchmark(
     safe_name = (name or "").strip()
     if not safe_name or safe_name.lower() == "undefined":
         raise HTTPException(status_code=422, detail="benchmark name is required")
-    safe_version = (version or "").strip()
-    if not safe_version or safe_version.lower() == "undefined":
-        raise HTTPException(status_code=422, detail="benchmark version is required")
-
     content = await file.read()
     try:
         result = BenchmarkImportService(uow).import_benchmark(
             name=safe_name,
-            version=safe_version,
             content=content,
             file_name=file.filename or "dataset.jsonl",
             mime_type=file.content_type,
@@ -88,25 +83,6 @@ async def list_benchmarks(
 
 
 @router.get(
-    "/benchmarks/{benchmark_id}/versions",
-    response_model=ApiResponse[PaginatedData[BenchmarkVersion]],
-    operation_id="listBenchmarkVersions",
-    tags=["Benchmark"],
-)
-async def list_benchmark_versions(
-    benchmark_id: int,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    service = BenchmarkService(uow)
-    items = service.list_versions(benchmark_id=benchmark_id, page=page, page_size=page_size)
-    total = uow.benchmark_versions.count(benchmark_id=benchmark_id)
-    return ok(PaginatedData[BenchmarkVersion](items=items, page=page, page_size=page_size, total=total).model_dump())
-
-
-@router.get(
     "/test-cases",
     response_model=ApiResponse[PaginatedData[TestCase]],
     operation_id="listTestCases",
@@ -115,19 +91,45 @@ async def list_benchmark_versions(
 async def list_test_cases(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
-    benchmark_version_id: int | None = None,
+    benchmark_id: int | None = None,
     status: str | None = None,
+    dataset_type: str | None = None,
+    keyword: str | None = None,
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
-    service = BenchmarkService(uow)
-    items = service.list_test_cases(
-        page=page,
-        page_size=page_size,
-        benchmark_version_id=benchmark_version_id,
-        status=status,
+    conditions = []
+    if benchmark_id is not None:
+        conditions.append(TestCaseModel.benchmark_id == benchmark_id)
+    if status is not None:
+        conditions.append(TestCaseModel.status == status)
+    if dataset_type is not None:
+        conditions.append(TestCaseModel.dataset_type == dataset_type)
+    cleaned_keyword = (keyword or "").strip()
+    if cleaned_keyword:
+        pattern = f"%{cleaned_keyword}%"
+        conditions.append(
+            or_(
+                TestCaseModel.external_id.ilike(pattern),
+                TestCaseModel.prompt.ilike(pattern),
+            )
+        )
+
+    items = list(
+        uow.session.scalars(
+            select(TestCaseModel)
+            .where(*conditions)
+            .order_by(TestCaseModel.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
     )
-    total = uow.test_cases.count(benchmark_version_id=benchmark_version_id, status=status)
+    total = int(
+        uow.session.scalar(
+            select(func.count()).select_from(TestCaseModel).where(*conditions)
+        )
+        or 0
+    )
     return ok(PaginatedData[TestCase](items=items, page=page, page_size=page_size, total=total).model_dump())
 
 
@@ -148,26 +150,6 @@ async def update_test_case(
     if test_case is None:
         raise HTTPException(status_code=404, detail="test case not found")
     return ok(TestCase.model_validate(test_case).model_dump())
-
-
-@router.delete(
-    "/benchmark-versions/{benchmark_version_id}",
-    response_model=ApiResponse[dict[str, int]],
-    operation_id="deleteBenchmarkVersion",
-    tags=["Benchmark"],
-)
-async def delete_benchmark_version(
-    benchmark_version_id: int,
-    _: None = Depends(require_local_token),
-    uow: UnitOfWork = Depends(get_uow),
-) -> dict:
-    try:
-        summary = BenchmarkService(uow).delete_version(benchmark_version_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    if summary is None:
-        raise HTTPException(status_code=404, detail="benchmark version not found")
-    return ok(summary)
 
 
 @router.delete(

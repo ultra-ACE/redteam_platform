@@ -1,4 +1,5 @@
 import logging
+import os
 
 from celery import Celery
 from celery.signals import worker_ready
@@ -22,6 +23,9 @@ celery_app.conf.update(
     task_track_started=True,
     task_always_eager=settings.celery_task_always_eager,
     task_eager_propagates=settings.celery_task_eager_propagates,
+    # T8：提高 Worker 吞吐。CLI 的 --concurrency 仍可覆盖该值。
+    worker_concurrency=int(os.getenv("CELERY_WORKER_CONCURRENCY", "4")),
+    worker_prefetch_multiplier=int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1")),
 )
 
 celery_app.autodiscover_tasks(["app.workers"])

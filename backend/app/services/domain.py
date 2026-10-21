@@ -19,24 +19,17 @@ class BenchmarkService(BaseService):
     def list_benchmarks(self, page: int, page_size: int, keyword: str | None = None, status: str | None = None):
         return self.uow.benchmarks.list(page=page, page_size=page_size, status=status)
 
-    def list_versions(self, benchmark_id: int, page: int, page_size: int):
-        return self.uow.benchmark_versions.list(
-            page=page,
-            page_size=page_size,
-            benchmark_id=benchmark_id,
-        )
-
     def list_test_cases(
         self,
         page: int,
         page_size: int,
-        benchmark_version_id: int | None = None,
+        benchmark_id: int | None = None,
         status: str | None = None,
     ):
         return self.uow.test_cases.list(
             page=page,
             page_size=page_size,
-            benchmark_version_id=benchmark_version_id,
+            benchmark_id=benchmark_id,
             status=status,
         )
 
@@ -51,61 +44,30 @@ class BenchmarkService(BaseService):
         self.uow.session.flush()
         return test_case
 
-    def delete_version(self, version_id: int) -> dict[str, int] | None:
-        version = self.uow.benchmark_versions.get(version_id)
-        if version is None:
-            return None
-        self._assert_version_unused(version.id)
-        summary = self._delete_version(version)
-        self.uow.session.flush()
-        return summary
-
     def delete_benchmark(self, benchmark_id: int) -> dict[str, int] | None:
         benchmark = self.uow.benchmarks.get(benchmark_id)
         if benchmark is None:
             return None
+        used = self.uow.evaluation_tasks.count(benchmark_id=benchmark_id)
+        if used:
+            raise ValueError(
+                f"该种子库已被 {used} 个评测任务引用，无法删除。"
+                "请先删除或重建这些评测任务。"
+            )
 
-        versions = self.uow.benchmark_versions.list(
+        test_cases = self.uow.test_cases.list(
             page=1,
             page_size=100000,
             benchmark_id=benchmark_id,
         )
-        for version in versions:
-            self._assert_version_unused(version.id)
-
-        summary = {"deleted_versions": 0, "deleted_test_cases": 0}
-        for version in versions:
-            partial = self._delete_version(version)
-            for key, value in partial.items():
-                summary[key] += value
-
-        self.uow.benchmarks.delete(benchmark)
-        self.uow.session.flush()
-        return summary
-
-    def _assert_version_unused(self, version_id: int) -> None:
-        used = self.uow.evaluation_tasks.count(benchmark_version_id=version_id)
-        if used:
-            raise ValueError(
-                f"该 Benchmark 版本已被 {used} 个评测任务引用，无法删除。"
-                "请先删除或重建这些评测任务。"
-            )
-
-    def _delete_version(self, version) -> dict[str, int]:
-        test_cases = self.uow.test_cases.list(
-            page=1,
-            page_size=100000,
-            benchmark_version_id=version.id,
-        )
         for test_case in test_cases:
             self.uow.test_cases.delete(test_case)
 
-        source_file_id = version.source_file_id
-        self.uow.benchmark_versions.delete(version)
+        source_file_id = benchmark.source_file_id
+        self.uow.benchmarks.delete(benchmark)
         self.uow.session.flush()
-
         if source_file_id:
-            still_used = self.uow.benchmark_versions.count(source_file_id=source_file_id)
+            still_used = self.uow.benchmarks.count(source_file_id=source_file_id)
             if not still_used:
                 stored_file = self.uow.files.get(source_file_id)
                 if stored_file is not None:
@@ -118,7 +80,7 @@ class BenchmarkService(BaseService):
                     self.uow.files.delete(stored_file)
                     self.uow.session.flush()
 
-        return {"deleted_versions": 1, "deleted_test_cases": len(test_cases)}
+        return {"deleted_test_cases": len(test_cases)}
 
 
 class ModelService(BaseService):
@@ -190,9 +152,11 @@ class TaskService(BaseService):
     def create_task(self, payload: Any, created_by: str = "local") -> EvaluationTask:
         seed_ids = list(dict.fromkeys(payload.seed_test_case_ids or []))
         self._validate_seed_ids(seed_ids)
+        if payload.benchmark_id is not None and self.uow.benchmarks.get(payload.benchmark_id) is None:
+            raise ValueError("种子库不存在")
         task = EvaluationTask(
             name=payload.name,
-            benchmark_version_id=payload.benchmark_version_id,
+            benchmark_id=payload.benchmark_id,
             status="queued",
             priority=payload.priority,
             created_by=created_by,

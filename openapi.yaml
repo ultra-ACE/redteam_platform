@@ -118,51 +118,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/benchmarks/{benchmark_id}/versions:
-    get:
-      tags:
-      - Benchmark
-      summary: List Benchmark Versions
-      operationId: listBenchmarkVersions
-      security:
-      - LocalToken: []
-      parameters:
-      - name: benchmark_id
-        in: path
-        required: true
-        schema:
-          type: integer
-          title: Benchmark Id
-      - name: page
-        in: query
-        required: false
-        schema:
-          type: integer
-          minimum: 1
-          default: 1
-          title: Page
-      - name: page_size
-        in: query
-        required: false
-        schema:
-          type: integer
-          maximum: 200
-          minimum: 1
-          default: 20
-          title: Page Size
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse_PaginatedData_BenchmarkVersion__'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/test-cases:
     get:
       tags:
@@ -189,14 +144,14 @@ paths:
           minimum: 1
           default: 20
           title: Page Size
-      - name: benchmark_version_id
+      - name: benchmark_id
         in: query
         required: false
         schema:
           anyOf:
           - type: integer
           - type: 'null'
-          title: Benchmark Version Id
+          title: Benchmark Id
       - name: status
         in: query
         required: false
@@ -205,6 +160,22 @@ paths:
           - type: string
           - type: 'null'
           title: Status
+      - name: dataset_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dataset Type
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
       responses:
         '200':
           description: Successful Response
@@ -246,34 +217,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiResponse_TestCase_'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/benchmark-versions/{benchmark_version_id}:
-    delete:
-      tags:
-      - Benchmark
-      summary: Delete Benchmark Version
-      operationId: deleteBenchmarkVersion
-      security:
-      - LocalToken: []
-      parameters:
-      - name: benchmark_version_id
-        in: path
-        required: true
-        schema:
-          type: integer
-          title: Benchmark Version Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApiResponse_dict_str__int__'
         '422':
           description: Validation Error
           content:
@@ -886,14 +829,6 @@ paths:
           - type: string
           - type: 'null'
           title: Status
-      - name: benchmark_version_id
-        in: query
-        required: false
-        schema:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Benchmark Version Id
       responses:
         '200':
           description: Successful Response
@@ -2148,28 +2083,6 @@ components:
           - req_01J8Z6K9YQ6M2H
       type: object
       title: ApiResponse[PaginatedData[AttackTemplate]]
-    ApiResponse_PaginatedData_BenchmarkVersion__:
-      properties:
-        code:
-          type: string
-          title: Code
-          default: OK
-        message:
-          type: string
-          title: Message
-          default: success
-        data:
-          anyOf:
-          - $ref: '#/components/schemas/PaginatedData_BenchmarkVersion_'
-          - type: 'null'
-        request_id:
-          type: string
-          title: Request Id
-          default: req_placeholder
-          examples:
-          - req_01J8Z6K9YQ6M2H
-      type: object
-      title: ApiResponse[PaginatedData[BenchmarkVersion]]
     ApiResponse_PaginatedData_Benchmark__:
       properties:
         code:
@@ -2620,6 +2533,7 @@ components:
     AttackMethodCode:
       type: string
       enum:
+      - custom
       - direct_request
       - role_play
       - prefix_injection
@@ -2662,6 +2576,7 @@ components:
       properties:
         method_code:
           $ref: '#/components/schemas/AttackMethodCode'
+          default: custom
         name:
           type: string
           title: Name
@@ -2683,7 +2598,6 @@ components:
           default: active
       type: object
       required:
-      - method_code
       - name
       - template_text
       title: AttackTemplateCreateRequest
@@ -2974,6 +2888,26 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        source_file_id:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Source File Id
+        case_count:
+          type: integer
+          title: Case Count
+          default: 0
+        checksum:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Checksum
+        imported_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Imported At
         status:
           type: string
           title: Status
@@ -2991,55 +2925,11 @@ components:
       - slug
       - source_type
       title: Benchmark
-    BenchmarkVersion:
-      properties:
-        benchmark_version_id:
-          type: integer
-          title: Benchmark Version Id
-        benchmark_id:
-          type: integer
-          title: Benchmark Id
-        version:
-          type: string
-          title: Version
-        source_file_id:
-          anyOf:
-          - type: integer
-          - type: 'null'
-          title: Source File Id
-        case_count:
-          type: integer
-          title: Case Count
-          default: 0
-        checksum:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Checksum
-        status:
-          type: string
-          title: Status
-          default: ready
-        imported_at:
-          anyOf:
-          - type: string
-            format: date-time
-          - type: 'null'
-          title: Imported At
-      type: object
-      required:
-      - benchmark_version_id
-      - benchmark_id
-      - version
-      title: BenchmarkVersion
     Body_importBenchmark:
       properties:
         name:
           type: string
           title: Name
-        version:
-          type: string
-          title: Version
         file:
           type: string
           contentMediaType: application/octet-stream
@@ -3052,7 +2942,6 @@ components:
       type: object
       required:
       - name
-      - version
       - file
       title: Body_importBenchmark
     DatasetType:
@@ -3136,11 +3025,11 @@ components:
         name:
           type: string
           title: Name
-        benchmark_version_id:
+        benchmark_id:
           anyOf:
           - type: integer
           - type: 'null'
-          title: Benchmark Version Id
+          title: Benchmark Id
         status:
           $ref: '#/components/schemas/TaskStatus'
         progress:
@@ -3204,11 +3093,11 @@ components:
         name:
           type: string
           title: Name
-        benchmark_version_id:
+        benchmark_id:
           anyOf:
           - type: integer
           - type: 'null'
-          title: Benchmark Version Id
+          title: Benchmark Id
         seed_test_case_ids:
           items:
             type: integer
@@ -4003,35 +3892,6 @@ components:
           default: false
       type: object
       title: PaginatedData[AttackTemplate]
-    PaginatedData_BenchmarkVersion_:
-      properties:
-        items:
-          items:
-            $ref: '#/components/schemas/BenchmarkVersion'
-          type: array
-          title: Items
-        page:
-          type: integer
-          minimum: 1.0
-          title: Page
-          default: 1
-        page_size:
-          type: integer
-          maximum: 200.0
-          minimum: 1.0
-          title: Page Size
-          default: 20
-        total:
-          type: integer
-          minimum: 0.0
-          title: Total
-          default: 0
-        has_next:
-          type: boolean
-          title: Has Next
-          default: false
-      type: object
-      title: PaginatedData[BenchmarkVersion]
     PaginatedData_Benchmark_:
       properties:
         items:
@@ -4681,9 +4541,9 @@ components:
         test_case_id:
           type: integer
           title: Test Case Id
-        benchmark_version_id:
+        benchmark_id:
           type: integer
-          title: Benchmark Version Id
+          title: Benchmark Id
         external_id:
           type: string
           title: External Id
@@ -4719,7 +4579,7 @@ components:
       type: object
       required:
       - test_case_id
-      - benchmark_version_id
+      - benchmark_id
       - external_id
       - prompt
       title: TestCase
