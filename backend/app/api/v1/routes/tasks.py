@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_uow
 from app.api.utils import get_operator, ok, require_local_token
+from app.db.models import TaskModelBinding
 from app.db.session import SessionLocal
 from app.schemas import (
     ApiResponse,
@@ -21,6 +22,7 @@ from app.schemas import (
     TaskStatusData,
 )
 from app.services import EvaluationResultService, StatisticsService, TaskExecutionService, TaskService, UnitOfWork
+from app.services.attack_strategies import StrategyConfigError, normalize_strategy
 from app.workers.queue import (
     enqueue_failed_task_cases,
     enqueue_pending_task_cases,
@@ -37,6 +39,73 @@ def _sse_event(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {data}\n\n"
 
 
+def _apply_raw_task_config(task, raw: dict) -> None:
+    """把成员 3 需要的扩展配置合并进 task.config。
+
+    ``EvaluationTaskCreateRequest`` 由成员 1 维护，暂未包含种子采样、攻击策略和
+    PAIR 攻击模型字段；这里先读取原始 JSON 并写入 JSON 类型的 task.config，
+    不新增数据库列，等成员 1 合并 schema 后再删除这段兼容逻辑。
+    """
+    if not isinstance(raw, dict):
+        return
+    config = dict(task.config or {})
+    for key in (
+        "seed_test_case_ids",
+        "sample_size",
+        "attack_strategy",
+        "attacker_model_id",
+        "attacker_system_prompt",
+        "max_rounds",
+    ):
+        if key in raw and raw[key] is not None:
+            config[key] = raw[key]
+
+    if "seed_test_case_ids" in config:
+        try:
+            config["seed_test_case_ids"] = [int(item) for item in config["seed_test_case_ids"]]
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="seed_test_case_ids must be a list of integers") from exc
+
+    if "sample_size" in config:
+        try:
+            config["sample_size"] = max(1, int(config["sample_size"]))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="sample_size must be an integer") from exc
+
+    if "max_rounds" in config:
+        try:
+            config["max_rounds"] = max(1, min(int(config["max_rounds"]), 20))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="max_rounds must be an integer") from exc
+
+    if "attacker_model_id" in config:
+        try:
+            config["attacker_model_id"] = int(config["attacker_model_id"])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="attacker_model_id must be an integer") from exc
+
+    raw_strategy = config.get("attack_strategy")
+    if raw_strategy is not None:
+        if not isinstance(raw_strategy, dict):
+            raise HTTPException(status_code=422, detail="attack_strategy must be an object")
+        try:
+            strategy_type, strategy_code, strategy_config = normalize_strategy(
+                raw_strategy.get("type") or raw_strategy.get("strategy_type"),
+                raw_strategy.get("code") or raw_strategy.get("strategy_code"),
+                raw_strategy.get("config") or raw_strategy.get("strategy_config"),
+            )
+        except StrategyConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        config["attack_strategy"] = {
+            "type": strategy_type,
+            "code": strategy_code,
+            "config": strategy_config,
+            "enabled": bool(raw_strategy.get("enabled", True)),
+        }
+
+    task.config = config
+
+
 @router.post(
     "/evaluation-tasks",
     response_model=ApiResponse[EvaluationTask],
@@ -45,6 +114,7 @@ def _sse_event(event: str, payload: dict) -> str:
 )
 async def create_evaluation_task(
     payload: EvaluationTaskCreateRequest,
+    request: Request,
     operator: str = Depends(get_operator),
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
@@ -54,6 +124,35 @@ async def create_evaluation_task(
         task = service.create_task(payload, created_by=operator)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        raw_payload = await request.json()
+    except Exception:
+        raw_payload = {}
+    _apply_raw_task_config(task, raw_payload)
+
+    attacker_model_id = task.config.get("attacker_model_id")
+    if attacker_model_id is not None:
+        attacker_model = uow.models.get(int(attacker_model_id))
+        if attacker_model is None or not attacker_model.enabled:
+            raise HTTPException(status_code=422, detail="attacker model not found or disabled")
+        existing_attacker = uow.task_model_bindings.list(
+            page=1,
+            page_size=1,
+            task_id=task.id,
+            model_id=int(attacker_model_id),
+            role="attacker",
+        )
+        if not existing_attacker:
+            uow.task_model_bindings.add(
+                TaskModelBinding(
+                    task_id=task.id,
+                    model_id=int(attacker_model_id),
+                    role="attacker",
+                    model_params={},
+                    enabled=True,
+                )
+            )
+
     uow.commit()
     enqueue_task(task.id)
     return ok(EvaluationTask.model_validate(task).model_dump())

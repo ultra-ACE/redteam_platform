@@ -1,9 +1,11 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import func, or_, select
 
 from app.api.deps import get_uow
 from app.api.utils import ok, require_local_token
+from app.db.models import TestCase as TestCaseModel
 from app.schemas import (
     ApiResponse,
     Benchmark,
@@ -117,17 +119,45 @@ async def list_test_cases(
     page_size: int = Query(default=20, ge=1, le=200),
     benchmark_version_id: int | None = None,
     status: str | None = None,
+    dataset_type: str | None = None,
+    keyword: str | None = None,
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:
-    service = BenchmarkService(uow)
-    items = service.list_test_cases(
-        page=page,
-        page_size=page_size,
-        benchmark_version_id=benchmark_version_id,
-        status=status,
+    # 成员 3 的接口层：keyword / dataset_type 过滤先在这里落地，
+    # 后续由成员 1 把同一套过滤下沉到 TestCaseRepository。
+    conditions = []
+    if benchmark_version_id is not None:
+        conditions.append(TestCaseModel.benchmark_version_id == benchmark_version_id)
+    if status is not None:
+        conditions.append(TestCaseModel.status == status)
+    if dataset_type is not None:
+        conditions.append(TestCaseModel.dataset_type == dataset_type)
+    cleaned_keyword = (keyword or "").strip()
+    if cleaned_keyword:
+        pattern = f"%{cleaned_keyword}%"
+        conditions.append(
+            or_(
+                TestCaseModel.external_id.ilike(pattern),
+                TestCaseModel.prompt.ilike(pattern),
+            )
+        )
+
+    items = list(
+        uow.session.scalars(
+            select(TestCaseModel)
+            .where(*conditions)
+            .order_by(TestCaseModel.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
     )
-    total = uow.test_cases.count(benchmark_version_id=benchmark_version_id, status=status)
+    total = int(
+        uow.session.scalar(
+            select(func.count()).select_from(TestCaseModel).where(*conditions)
+        )
+        or 0
+    )
     return ok(PaginatedData[TestCase](items=items, page=page, page_size=page_size, total=total).model_dump())
 
 

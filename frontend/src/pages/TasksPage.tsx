@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   EyeOutlined,
@@ -10,7 +10,23 @@ import {
   StopOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import { Button, Form, Input, InputNumber, Modal, Popconfirm, Progress, Select, Space, Table, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Col,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Progress,
+  Row,
+  Select,
+  Space,
+  Switch,
+  Table,
+  message,
+} from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   cancelTask,
@@ -21,14 +37,36 @@ import {
   listJudgeProfiles,
   listModels,
   listTasks,
+  listTestCases,
   pauseTask,
   resumeTask,
   retryFailedTask,
   startTask,
 } from '../api';
 import { PageHeader, TaskStatusTag } from '../components/ui';
-import type { EvaluationTask } from '../types/api';
+import type { EvaluationTask, TestCase } from '../types/api';
 import { formatDateTime } from '../utils/format';
+
+const STRATEGY_TYPES = [
+  { value: 'static', label: '静态模板（不变换）' },
+  { value: 'transform', label: '纯变换（Base64 / Puzzler）' },
+  { value: 'iterative', label: 'PAIR 迭代（多轮）' },
+];
+
+const STRATEGY_CODES: Record<string, Array<{ value: string; label: string }>> = {
+  static: [{ value: 'static', label: 'static · 原样发送' }],
+  transform: [
+    { value: 'base64', label: 'base64 · Base64 编码' },
+    { value: 'puzzler', label: 'puzzler · Puzzler 谜题' },
+  ],
+  iterative: [{ value: 'pair', label: 'pair · PAIR 迭代' }],
+};
+
+const DATASET_TYPE_OPTIONS = [
+  { value: 'harmful', label: 'harmful · 有害' },
+  { value: 'benign', label: 'benign · 良性' },
+  { value: 'jailbreak', label: 'jailbreak · 越狱' },
+];
 
 export function TasksPage() {
   const navigate = useNavigate();
@@ -36,6 +74,58 @@ export function TasksPage() {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const benchmarkId = Form.useWatch('benchmark_id', form);
+  const benchmarkVersionId = Form.useWatch('benchmark_version_id', form);
+  const seedDatasetType = Form.useWatch('seed_dataset_type', form);
+  const strategyType = Form.useWatch('strategy_type', form);
+  const strategyCode = Form.useWatch('strategy_code', form);
+  const [seedSearchInput, setSeedSearchInput] = useState('');
+  const [seedKeyword, setSeedKeyword] = useState('');
+  const [seedOptions, setSeedOptions] = useState<TestCase[]>([]);
+
+  // 远程搜索防抖：输入停顿 300ms 后才发起请求，避免每敲一个字都打后端。
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSeedKeyword(seedSearchInput.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [seedSearchInput]);
+
+  // 切换 Benchmark 版本时，已选种子不再属于当前版本，清空选择。
+  useEffect(() => {
+    form.setFieldValue('seed_test_case_ids', []);
+    setSeedOptions([]);
+  }, [benchmarkVersionId, form]);
+
+  const seedQuery = useQuery({
+    queryKey: ['seed-test-cases', benchmarkVersionId, seedKeyword, seedDatasetType],
+    queryFn: () =>
+      listTestCases({
+        benchmark_version_id: benchmarkVersionId,
+        keyword: seedKeyword || undefined,
+        dataset_type: seedDatasetType || undefined,
+        status: 'active',
+        page: 1,
+        page_size: 50,
+      }),
+    enabled: open && Boolean(benchmarkVersionId),
+  });
+
+  useEffect(() => {
+    const items = seedQuery.data?.items ?? [];
+    if (!items.length) return;
+    setSeedOptions((current) => {
+      const byId = new Map(current.map((item) => [item.test_case_id, item]));
+      items.forEach((item) => byId.set(item.test_case_id, item));
+      return Array.from(byId.values());
+    });
+  }, [seedQuery.data]);
+
+  const seedSelectOptions = useMemo(
+    () =>
+      seedOptions.map((item) => ({
+        value: item.test_case_id,
+        label: `${item.external_id} · ${(item.prompt || '').slice(0, 40)}${(item.prompt || '').length > 40 ? '…' : ''}`,
+      })),
+    [seedOptions],
+  );
 
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks({ page_size: 200 }) });
   const modelsQuery = useQuery({ queryKey: ['models', 'tasks'], queryFn: () => listModels({ page_size: 200 }) });
@@ -234,9 +324,25 @@ export function TasksPage() {
             model_ids: [],
             repeat: 1,
             timeout_seconds: 120,
-            concurrency: 2,
+            concurrency: 4,
+            seed_test_case_ids: [],
+            sample_size: 50,
+            seed_dataset_type: undefined,
+            strategy_type: 'static',
+            strategy_code: 'static',
+            strategy_style: 'riddle',
+            strategy_enabled: true,
+            max_rounds: 3,
           }}
           onFinish={(values) => {
+            const strategyCodeValue = values.strategy_code ?? 'static';
+            const strategyConfig: Record<string, unknown> = {};
+            if (strategyCodeValue === 'puzzler') {
+              strategyConfig.style = values.strategy_style ?? 'riddle';
+            }
+            if (values.strategy_type === 'iterative') {
+              strategyConfig.max_rounds = values.max_rounds ?? 3;
+            }
             createMutation.mutate({
               name: values.name,
               benchmark_version_id: values.benchmark_version_id,
@@ -256,6 +362,18 @@ export function TasksPage() {
                 timeout_seconds: values.timeout_seconds,
                 retry: { max_attempts: 1, backoff_seconds: 3 },
                 concurrency: values.concurrency,
+              },
+              // 成员 3 扩展配置：由后端 create 路由合并进 task.config
+              seed_test_case_ids: values.seed_test_case_ids ?? [],
+              sample_size: values.sample_size ?? 50,
+              max_rounds: values.max_rounds ?? 3,
+              attacker_model_id:
+                values.strategy_type === 'iterative' ? values.attacker_model_id : undefined,
+              attack_strategy: {
+                type: values.strategy_type ?? 'static',
+                code: strategyCodeValue,
+                config: strategyConfig,
+                enabled: values.strategy_enabled !== false,
               },
             });
           }}
@@ -282,6 +400,49 @@ export function TasksPage() {
               }))}
             />
           </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="seed_dataset_type" label="种子类型筛选">
+                <Select
+                  allowClear
+                  placeholder="全部类型"
+                  options={DATASET_TYPE_OPTIONS}
+                  disabled={!benchmarkVersionId}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={16}>
+              <Form.Item
+                name="seed_test_case_ids"
+                label="种子用例（远程搜索）"
+                extra="输入外部编号或 Prompt 搜索，最多返回 50 条；不选则按下面采样条数自动抽取"
+              >
+                <Select
+                  mode="multiple"
+                  allowClear
+                  showSearch
+                  filterOption={false}
+                  placeholder={benchmarkVersionId ? '输入关键词搜索种子' : '请先选择 Benchmark 版本'}
+                  disabled={!benchmarkVersionId}
+                  loading={seedQuery.isFetching}
+                  onSearch={setSeedSearchInput}
+                  options={seedSelectOptions}
+                  notFoundContent={
+                    seedQuery.isFetching ? '搜索中…' : seedKeyword ? '没有匹配的种子' : '输入关键词开始搜索'
+                  }
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item
+            name="sample_size"
+            label="自动采样条数"
+            extra="未手动选择种子时生效；默认 50 条，避免一次展开上千条"
+          >
+            <InputNumber min={1} max={100000} style={{ width: 180 }} />
+          </Form.Item>
+
           <Form.Item
             name="model_ids"
             label="被测模型"
@@ -311,6 +472,83 @@ export function TasksPage() {
               }))}
             />
           </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="strategy_type" label="攻击策略">
+                <Select
+                  options={STRATEGY_TYPES}
+                  onChange={(value) => {
+                    const defaultCode =
+                      value === 'transform' ? 'base64' : value === 'iterative' ? 'pair' : 'static';
+                    form.setFieldValue('strategy_code', defaultCode);
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="strategy_code" label="策略实现">
+                <Select options={STRATEGY_CODES[strategyType ?? 'static'] ?? STRATEGY_CODES.static} />
+              </Form.Item>
+            </Col>
+          </Row>
+          {strategyCode === 'puzzler' ? (
+            <Form.Item name="strategy_style" label="Puzzler 风格">
+              <Select
+                options={[
+                  { value: 'riddle', label: 'riddle · 谜题' },
+                  { value: 'story', label: 'story · 故事' },
+                  { value: 'reverse', label: 'reverse · 倒序' },
+                ]}
+              />
+            </Form.Item>
+          ) : null}
+          <Form.Item
+            name="strategy_enabled"
+            label="启用策略变换"
+            valuePropName="checked"
+            extra="关闭后即使选择了 Base64 / Puzzler 也按原始 Prompt 发送"
+          >
+            <Switch checkedChildren="启用" unCheckedChildren="停用" />
+          </Form.Item>
+          {strategyType === 'iterative' ? (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="PAIR 迭代需要攻击模型"
+                description="攻击模型生成 → 目标模型回答 → Judge 判定 → 根据反馈改写；命中 unsafe 会提前停止。"
+              />
+              <Row gutter={16}>
+                <Col span={16}>
+                  <Form.Item
+                    name="attacker_model_id"
+                    label="攻击模型（PAIR）"
+                    rules={[{ required: true, message: 'PAIR 迭代必须选择攻击模型' }]}
+                  >
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder="选择 OpenAI-compatible 或 Ollama 模型"
+                      options={(modelsQuery.data?.items ?? [])
+                        .filter((item) => ['openai_compatible', 'ollama'].includes(item.adapter_type))
+                        .map((item) => ({
+                          value: item.model_id,
+                          label: `${item.name} · ${item.adapter_type}`,
+                        }))}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="max_rounds" label="最大迭代轮数">
+                    <InputNumber min={1} max={20} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          ) : null}
+
           <Form.Item
             name="judge_profile_ids"
             label="Judge 配置"
