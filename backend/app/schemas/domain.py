@@ -51,6 +51,7 @@ class BenchmarkImportError(ORMSchema):
 class BenchmarkImportResult(ORMSchema):
     benchmark_id: int
     imported_count: int
+    skipped_count: int = 0
     failed_count: int
     errors: list[BenchmarkImportError] = Field(default_factory=list)
     detected_adapter: str | None = None

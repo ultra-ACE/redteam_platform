@@ -116,7 +116,7 @@ def test_reimport_same_chinese_library_name_appends_cases(tmp_path) -> None:
     ).encode("utf-8")
     second = "\n".join(
         [
-            json.dumps({"external_id": "zh-1", "提示词": "重复问题"}, ensure_ascii=False),
+            json.dumps({"external_id": "zh-1", "提示词": "问题一"}, ensure_ascii=False),
             json.dumps({"external_id": "zh-2", "提示词": "问题二"}, ensure_ascii=False),
         ]
     ).encode("utf-8")
@@ -143,7 +143,8 @@ def test_reimport_same_chinese_library_name_appends_cases(tmp_path) -> None:
 
         assert first_result.benchmark_id == second_result.benchmark_id
         assert second_result.imported_count == 1
-        assert second_result.failed_count == 1
+        assert second_result.skipped_count == 1
+        assert second_result.failed_count == 0
         assert uow.test_cases.count(benchmark_id=first_result.benchmark_id) == 2
 
 

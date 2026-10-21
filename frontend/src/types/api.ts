@@ -58,6 +58,7 @@ export type BenchmarkImportError = {
 export type BenchmarkImportResult = {
   benchmark_id: number;
   imported_count: number;
+  skipped_count: number;
   failed_count: number;
   errors: BenchmarkImportError[];
   detected_adapter?: string | null;

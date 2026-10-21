@@ -79,6 +79,7 @@ export function BenchmarksPage() {
           results.push({
             benchmark_id: 0,
             imported_count: 0,
+            skipped_count: 0,
             failed_count: 1,
             errors: [{ row_number: 0, message: text }],
             file_name: payload.file_name,
@@ -89,12 +90,15 @@ export function BenchmarksPage() {
     },
     onSuccess: (results) => {
       setImportResults(results);
-      const succeeded = results.filter((item) => item.imported_count > 0).length;
       const totalImported = results.reduce((sum, item) => sum + item.imported_count, 0);
-      if (succeeded === results.length) {
-        message.success(`${results.length} 个文件导入完成，共 ${totalImported} 条种子`);
+      const totalSkipped = results.reduce((sum, item) => sum + item.skipped_count, 0);
+      const failedFiles = results.filter((item) => item.failed_count > 0).length;
+      if (failedFiles === 0) {
+        message.success(
+          `${results.length} 个文件导入完成，新增 ${totalImported} 条，跳过 ${totalSkipped} 条重复种子`,
+        );
       } else {
-        message.warning(`${results.length} 个文件中成功 ${succeeded} 个，请查看导入结果`);
+        message.warning(`${results.length} 个文件中 ${failedFiles} 个存在失败记录，请查看导入结果`);
       }
       queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
       queryClient.invalidateQueries({ queryKey: ['test-cases'] });
@@ -371,7 +375,7 @@ export function BenchmarksPage() {
                   type={importResults.some((item) => item.imported_count === 0) ? 'warning' : 'success'}
                   showIcon
                   message="种子导入完成"
-                  description={`共 ${importResults.length} 个文件，成功导入 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条种子。`}
+                  description={`共 ${importResults.length} 个文件，新增 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条，跳过 ${importResults.reduce((sum, item) => sum + item.skipped_count, 0)} 条重复种子。`}
                 />
                 <Table
                   rowKey="file_name"
@@ -396,6 +400,7 @@ export function BenchmarksPage() {
                         ),
                     },
                     { title: '成功', dataIndex: 'imported_count', width: 80 },
+                    { title: '跳过', dataIndex: 'skipped_count', width: 80 },
                     { title: '失败', dataIndex: 'failed_count', width: 80 },
                     {
                       title: '数据集类型分布',

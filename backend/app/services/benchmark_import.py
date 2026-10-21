@@ -59,7 +59,7 @@ class BenchmarkImportService(BaseService):
             page_size=100000,
             benchmark_id=benchmark.id,
         )
-        existing_external_ids = {item.external_id for item in existing_cases}
+        existing_by_external_id = {item.external_id: item for item in existing_cases}
         benchmark.source_file_id = stored_file.id
         benchmark.raw_schema = {
             "adapter": match.adapter,
@@ -73,14 +73,25 @@ class BenchmarkImportService(BaseService):
         benchmark.imported_at = datetime.now(timezone.utc)
 
         valid_cases: list[tuple[int, CanonicalCase, TestCase]] = []
+        skipped_count = 0
         for row_number, item in raw_rows:
             try:
                 case = adapter.normalize(item, row_number, file_name)
-                if case.external_id in existing_external_ids:
-                    raise ValueError(f"duplicate external_id: {case.external_id}")
+                existing = existing_by_external_id.get(case.external_id)
+                if existing is not None:
+                    content_hash = self._content_hash(case)
+                    if existing.content_hash == content_hash or (
+                        existing.prompt == case.prompt
+                        and (existing.system_prompt or "") == (case.system_prompt or "")
+                    ):
+                        skipped_count += 1
+                        continue
+                    raise ValueError(
+                        f"external_id already exists with different content: {case.external_id}"
+                    )
                 test_case = self._build_test_case(benchmark.id, case)
                 self.uow.test_cases.add(test_case)
-                existing_external_ids.add(case.external_id)
+                existing_by_external_id[case.external_id] = test_case
                 valid_cases.append((row_number, case, test_case))
             except Exception as exc:
                 errors.append(BenchmarkImportError(row_number=row_number, message=str(exc)))
@@ -99,6 +110,7 @@ class BenchmarkImportService(BaseService):
         return BenchmarkImportResult(
             benchmark_id=benchmark.id,
             imported_count=len(valid_cases),
+            skipped_count=skipped_count,
             failed_count=len(errors),
             errors=errors,
             detected_adapter=match.adapter,
@@ -196,9 +208,7 @@ class BenchmarkImportService(BaseService):
         return self.uow.benchmarks.add(benchmark)
 
     def _build_test_case(self, benchmark_id: int, case: CanonicalCase) -> TestCase:
-        content_hash = hashlib.sha256(
-            f"{case.system_prompt or ''}\n{case.prompt}".encode("utf-8")
-        ).hexdigest()
+        content_hash = self._content_hash(case)
         # 双保险：即使适配器漏掉规范化，这里也保证写入合法枚举
         dataset_type = normalize_dataset_type(case.dataset_type)
         sample_kind = normalize_sample_kind(case.sample_kind)
@@ -215,6 +225,12 @@ class BenchmarkImportService(BaseService):
             content_hash=content_hash,
             status="active",
         )
+
+    @staticmethod
+    def _content_hash(case: CanonicalCase) -> str:
+        return hashlib.sha256(
+            f"{case.system_prompt or ''}\n{case.prompt}".encode("utf-8")
+        ).hexdigest()
 
     @staticmethod
     def _slugify(name: str) -> str:
