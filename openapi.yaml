@@ -1430,7 +1430,7 @@ paths:
         required: false
         schema:
           type: integer
-          maximum: 200
+          maximum: 2000
           minimum: 1
           default: 20
           title: Page Size

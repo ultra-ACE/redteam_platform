@@ -22,7 +22,7 @@ router = APIRouter(tags=["人工复核"])
 )
 async def list_manual_reviews(
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=200),
+    page_size: int = Query(default=20, ge=1, le=2000),
     status: str | None = None,
     trigger_reason: str | None = None,
     task_id: int | None = None,

@@ -14,7 +14,7 @@ export function ReviewsPage() {
   const [keyword, setKeyword] = useState('');
   const [form] = Form.useForm();
 
-  const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 200 }) });
+  const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 2000 }) });
   const pendingSummaryQuery = useQuery({
     queryKey: ['manual-reviews', 'pending-summary'],
     queryFn: () => listManualReviews({ page: 1, page_size: 1, status: 'pending' }),
