@@ -27,7 +27,7 @@ class ErrorResponse(BaseModel):
 class PaginatedData(BaseModel, Generic[T]):
     items: list[T] = Field(default_factory=list)
     page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1, le=200)
+    page_size: int = Field(default=20, ge=1, le=2000)
     total: int = Field(default=0, ge=0)
     has_next: bool = False
 
