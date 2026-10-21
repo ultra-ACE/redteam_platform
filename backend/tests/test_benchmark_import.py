@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.db.base import Base
-from app.db.models import Benchmark, BenchmarkVersion, TestCase
+from app.db.models import Benchmark, TestCase
 from app.services.benchmark_import import BenchmarkImportService
 from app.services.uow import UnitOfWork
 
@@ -51,7 +51,6 @@ def test_import_chinese_dataset_writes_types(tmp_path) -> None:
         service = BenchmarkImportService(uow)
         result = service.import_benchmark(
             name="JailBench 中文子集",
-            version="v1",
             content=_make_dataset_bytes(),
             file_name="zh_jailbench.jsonl",
             source_type="chinese_generic",
@@ -69,7 +68,7 @@ def test_import_chinese_dataset_writes_types(tmp_path) -> None:
         assert result.dataset_type_counts.get("benign") == 1
 
         # 落库数据校验
-        test_cases = uow.test_cases.list(page=1, page_size=10, benchmark_version_id=result.benchmark_version_id)
+        test_cases = uow.test_cases.list(page=1, page_size=10, benchmark_id=result.benchmark_id)
         by_external = {row.external_id: row for row in test_cases}
         assert by_external["jailbench-zh-0001"].dataset_type == "harmful"
         assert by_external["jailbench-zh-0001"].sample_kind == "seed"
@@ -95,7 +94,6 @@ def test_import_rejects_unknown_dataset_type(tmp_path) -> None:
         uow = UnitOfWork(session)
         result = BenchmarkImportService(uow).import_benchmark(
             name="bad-types",
-            version="v1",
             content=lines.encode("utf-8"),
             file_name="bad.jsonl",
             source_type="chinese_generic",
@@ -104,6 +102,46 @@ def test_import_rejects_unknown_dataset_type(tmp_path) -> None:
         session.commit()
         assert result.imported_count == 1
         # 落库后必须合法
-        rows_db = uow.test_cases.list(page=1, page_size=10, benchmark_version_id=result.benchmark_version_id)
+        rows_db = uow.test_cases.list(page=1, page_size=10, benchmark_id=result.benchmark_id)
         assert rows_db[0].dataset_type == "harmful"
         assert rows_db[0].sample_kind is None
+
+
+def test_reimport_same_chinese_library_name_appends_cases(tmp_path) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    first = json.dumps(
+        {"external_id": "zh-1", "提示词": "问题一", "数据集类型": "有害"},
+        ensure_ascii=False,
+    ).encode("utf-8")
+    second = "\n".join(
+        [
+            json.dumps({"external_id": "zh-1", "提示词": "重复问题"}, ensure_ascii=False),
+            json.dumps({"external_id": "zh-2", "提示词": "问题二"}, ensure_ascii=False),
+        ]
+    ).encode("utf-8")
+
+    with Session(engine, expire_on_commit=False) as session:
+        uow = UnitOfWork(session)
+        service = BenchmarkImportService(uow)
+        first_result = service.import_benchmark(
+            name="中文种子库",
+            content=first,
+            file_name="first.jsonl",
+            source_type="chinese_generic",
+            base_dir=tmp_path,
+        )
+        session.commit()
+        second_result = service.import_benchmark(
+            name="中文种子库",
+            content=second,
+            file_name="second.jsonl",
+            source_type="chinese_generic",
+            base_dir=tmp_path,
+        )
+        session.commit()
+
+        assert first_result.benchmark_id == second_result.benchmark_id
+        assert second_result.imported_count == 1
+        assert second_result.failed_count == 1
+        assert uow.test_cases.count(benchmark_id=first_result.benchmark_id) == 2

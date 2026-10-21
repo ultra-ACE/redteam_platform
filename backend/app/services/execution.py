@@ -58,7 +58,7 @@ class TaskExecutionService(BaseService):
         """把任务展开为 task_cases；返回所有用例 ID（含已存在的），但保留其原状态。
 
         - 种子优先取 ``task.config["seed_test_case_ids"]``；
-        - 旧任务没有种子时回退到 ``benchmark_version_id`` 下的 active 用例，
+        - 旧任务没有种子时回退到 ``benchmark_id`` 下的 active 用例，
           已有 task_cases 的旧任务按已有种子继续，保证断点续跑不丢用例；
         - 组合为 种子 × 模板 × 模型，``case_key = seed_id:template_id:model_id``；
         - 所有依赖一次性预取（T8），展开过程不再逐条查询。
@@ -81,12 +81,12 @@ class TaskExecutionService(BaseService):
                 test_case = self.uow.test_cases.get(seed_id)
                 if test_case is not None and test_case.status == "active":
                     test_cases.append(test_case)
-        elif task.benchmark_version_id is not None:
+        elif task.benchmark_id is not None:
             # 旧任务：回退到版本下的全部用例
             test_cases = self.uow.test_cases.list(
                 page=1,
                 page_size=100000,
-                benchmark_version_id=task.benchmark_version_id,
+                benchmark_id=task.benchmark_id,
                 status="active",
             )
         else:
@@ -191,7 +191,7 @@ class TaskExecutionService(BaseService):
         stmt = (
             select(TestCase)
             .where(
-                TestCase.benchmark_version_id == task.benchmark_version_id,
+                TestCase.benchmark_id == task.benchmark_id,
                 TestCase.status == "active",
             )
             .order_by(TestCase.id)

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Col,
+  Descriptions,
   Form,
   Input,
   List,
@@ -24,16 +25,14 @@ import type { UploadFile } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   deleteBenchmark,
-  deleteBenchmarkVersion,
   importBenchmark,
   listBenchmarkAdapters,
   listBenchmarks,
-  listBenchmarkVersions,
   listTestCases,
 } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import { AttackTemplatesPage as AttackTemplatesTab } from './AttackTemplatesPage';
-import type { Benchmark, BenchmarkImportResult, BenchmarkVersion } from '../types/api';
+import type { Benchmark, BenchmarkImportResult } from '../types/api';
 import { formatDateTime } from '../utils/format';
 import {
   TEMPLATE_IMPORT_ACCEPT,
@@ -44,14 +43,9 @@ import type { TemplateImportSummary } from '../utils/templateImport';
 
 const { Dragger } = Upload;
 
-/** 多文件导入时，用文件名生成版本号，例如 harmbench_text_test.jsonl -> harmbench_text_test */
-const fileVersionName = (fileName: string) =>
-  fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 60) || 'v1';
-
 export function BenchmarksPage() {
   const queryClient = useQueryClient();
   const [selectedBenchmark, setSelectedBenchmark] = useState<Benchmark | null>(null);
-  const [selectedVersion, setSelectedVersion] = useState<BenchmarkVersion | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importTarget, setImportTarget] = useState<'seed' | 'template'>('seed');
   const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -61,15 +55,10 @@ export function BenchmarksPage() {
   const [form] = Form.useForm();
 
   const benchmarksQuery = useQuery({ queryKey: ['benchmarks'], queryFn: () => listBenchmarks({ page_size: 200 }) });
-  const versionsQuery = useQuery({
-    queryKey: ['benchmark-versions', selectedBenchmark?.benchmark_id],
-    queryFn: () => listBenchmarkVersions(selectedBenchmark!.benchmark_id),
-    enabled: Boolean(selectedBenchmark?.benchmark_id),
-  });
   const testCasesQuery = useQuery({
-    queryKey: ['test-cases', selectedVersion?.benchmark_version_id],
-    queryFn: () => listTestCases({ benchmark_version_id: selectedVersion!.benchmark_version_id, page_size: 200 }),
-    enabled: Boolean(selectedVersion?.benchmark_version_id),
+    queryKey: ['test-cases', selectedBenchmark?.benchmark_id],
+    queryFn: () => listTestCases({ benchmark_id: selectedBenchmark!.benchmark_id, page_size: 200 }),
+    enabled: Boolean(selectedBenchmark?.benchmark_id),
   });
   const adaptersQuery = useQuery({
     queryKey: ['benchmark-adapters'],
@@ -88,7 +77,6 @@ export function BenchmarksPage() {
           const text = error instanceof Error ? error.message : '导入失败';
           results.push({
             benchmark_id: 0,
-            benchmark_version_id: 0,
             imported_count: 0,
             failed_count: 1,
             errors: [{ row_number: 0, message: text }],
@@ -103,12 +91,11 @@ export function BenchmarksPage() {
       const succeeded = results.filter((item) => item.imported_count > 0).length;
       const totalImported = results.reduce((sum, item) => sum + item.imported_count, 0);
       if (succeeded === results.length) {
-        message.success(`${results.length} 个文件导入完成，共 ${totalImported} 条测试用例`);
+        message.success(`${results.length} 个文件导入完成，共 ${totalImported} 条种子`);
       } else {
         message.warning(`${results.length} 个文件中成功 ${succeeded} 个，请查看导入结果`);
       }
       queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
-      queryClient.invalidateQueries({ queryKey: ['benchmark-versions'] });
       queryClient.invalidateQueries({ queryKey: ['test-cases'] });
     },
   });
@@ -132,36 +119,19 @@ export function BenchmarksPage() {
     mutationFn: deleteBenchmark,
     onSuccess: (summary) => {
       message.success(
-        `已删除 ${summary.deleted_versions} 个版本、${summary.deleted_test_cases} 条测试用例`,
-      );
-      setSelectedBenchmark(null);
-      setSelectedVersion(null);
-      queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
-      queryClient.invalidateQueries({ queryKey: ['benchmark-versions'] });
-      queryClient.invalidateQueries({ queryKey: ['test-cases'] });
-    },
-    onError: (error: Error) => message.error(error.message),
-  });
-
-  const deleteVersionMutation = useMutation({
-    mutationFn: deleteBenchmarkVersion,
-    onSuccess: (summary) => {
-      message.success(
         `已删除 ${summary.deleted_test_cases} 条测试用例`,
       );
-      setSelectedVersion(null);
+      setSelectedBenchmark(null);
       queryClient.invalidateQueries({ queryKey: ['benchmarks'] });
-      queryClient.invalidateQueries({ queryKey: ['benchmark-versions'] });
       queryClient.invalidateQueries({ queryKey: ['test-cases'] });
     },
     onError: (error: Error) => message.error(error.message),
   });
 
   const benchmarks = benchmarksQuery.data?.items ?? [];
-  const versions = versionsQuery.data?.items ?? [];
   const testCases = testCasesQuery.data?.items ?? [];
 
-  const selectedBenchmarkName = useMemo(() => selectedBenchmark?.name ?? '未选择 Benchmark', [selectedBenchmark]);
+  const selectedBenchmarkName = useMemo(() => selectedBenchmark?.name ?? '未选择种子库', [selectedBenchmark]);
 
   /** 用例表格的本地筛选：支持按来源编号、提示词正文、原始标签和数字 ID 查找。 */
   const filteredTestCases = useMemo(() => {
@@ -198,14 +168,12 @@ export function BenchmarksPage() {
       .then((values) => {
         const benchmarkName = String(values.name ?? '').trim();
         if (!benchmarkName || benchmarkName === 'undefined') {
-          message.error('请填写有效的 Benchmark 名称');
+          message.error('请填写有效的种子库名称');
           return;
         }
         const payloads = files.map((file) => {
           const formData = new FormData();
           formData.append('name', benchmarkName);
-          // 单文件使用表单里的版本号；多文件按文件名自动生成版本号
-          formData.append('version', files.length === 1 ? values.version : fileVersionName(file.name));
           // 留空则由后端按表头签名自动识别数据集结构
           if (values.source_type) {
             formData.append('source_type', String(values.source_type));
@@ -228,7 +196,7 @@ export function BenchmarksPage() {
     <>
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={8}>
-          <Card className="section-card" title="Benchmark 列表">
+          <Card className="section-card" title="种子库列表">
             {benchmarks.length ? (
               <List
                 dataSource={benchmarks}
@@ -242,7 +210,6 @@ export function BenchmarksPage() {
                     }}
                     onClick={() => {
                       setSelectedBenchmark(item);
-                      setSelectedVersion(null);
                     }}
                   >
                     <List.Item.Meta
@@ -250,13 +217,14 @@ export function BenchmarksPage() {
                       description={
                         <Space>
                           <Tag color="blue">{item.slug}</Tag>
+                          <Tag>{item.case_count} 条种子</Tag>
                           <Tag color={item.status === 'active' ? 'success' : 'default'}>{item.status}</Tag>
                         </Space>
                       }
                     />
                     <Popconfirm
-                      title="删除该 Benchmark？"
-                      description="将同时删除它的全部版本、测试用例和风险映射，无法恢复。"
+                      title="删除该种子库？"
+                      description="将同时删除其中的全部种子问题，无法恢复。"
                       okText="删除"
                       cancelText="取消"
                       okButtonProps={{ danger: true, loading: deleteBenchmarkMutation.isPending }}
@@ -275,66 +243,43 @@ export function BenchmarksPage() {
               />
             ) : (
               <EmptyPanel
-                title="暂无 Benchmark"
-                description="导入第一个 Benchmark 数据集，系统会自动创建版本和标准测试用例。"
-                action={<Button type="primary" icon={<PlusOutlined />} onClick={() => setImportOpen(true)}>导入 Benchmark</Button>}
+                title="暂无种子库"
+                description="导入一份种子数据集，创建第一个种子库。"
+                action={<Button type="primary" icon={<PlusOutlined />} onClick={() => setImportOpen(true)}>导入数据</Button>}
               />
             )}
           </Card>
         </Col>
 
         <Col xs={24} xl={16}>
-          <Card className="section-card" title={`${selectedBenchmarkName} · 版本列表`}>
+          <Card className="section-card" title={`${selectedBenchmarkName} · 种子库信息`}>
             {selectedBenchmark ? (
-              <Table<BenchmarkVersion>
-                rowKey="benchmark_version_id"
-                loading={versionsQuery.isLoading}
-                dataSource={versions}
-                pagination={false}
-                onRow={(record) => ({ onClick: () => setSelectedVersion(record) })}
-                columns={[
-                  { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 100 },
-                  { title: '版本', dataIndex: 'version' },
-                  { title: '用例数', dataIndex: 'case_count' },
-                  { title: '校验和', dataIndex: 'checksum', render: (value) => <code>{String(value ?? '').slice(0, 16)}…</code> },
-                  { title: '状态', dataIndex: 'status', render: (value) => <Tag color={value === 'ready' ? 'success' : 'processing'}>{value}</Tag> },
-                  { title: '导入时间', dataIndex: 'imported_at', render: formatDateTime },
-                  {
-                    title: '操作',
-                    width: 80,
-                    render: (_, record) => (
-                      <Popconfirm
-                        title="删除该版本？"
-                        description="将删除该版本的全部测试用例和风险映射，无法恢复。"
-                        okText="删除"
-                        cancelText="取消"
-                        okButtonProps={{ danger: true, loading: deleteVersionMutation.isPending }}
-                        onConfirm={() => deleteVersionMutation.mutate(record.benchmark_version_id)}
-                      >
-                        <Button
-                          type="text"
-                          danger
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </Popconfirm>
-                    ),
-                  },
-                ]}
-              />
+              <Descriptions column={2} size="small" bordered>
+                <Descriptions.Item label="种子数量">{selectedBenchmark.case_count}</Descriptions.Item>
+                <Descriptions.Item label="状态">
+                  <Tag color={selectedBenchmark.status === 'active' ? 'success' : 'default'}>
+                    {selectedBenchmark.status}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="校验和">
+                  <code>{String(selectedBenchmark.checksum ?? '').slice(0, 24)}</code>
+                </Descriptions.Item>
+                <Descriptions.Item label="导入时间">
+                  {formatDateTime(selectedBenchmark.imported_at)}
+                </Descriptions.Item>
+              </Descriptions>
             ) : (
-              <EmptyPanel title="请选择 Benchmark" description="从左侧选择 Benchmark，查看版本和测试用例。" />
+              <EmptyPanel title="请选择种子库" description="从左侧选择种子库，查看其中的种子问题。" />
             )}
           </Card>
         </Col>
       </Row>
 
-      {selectedVersion ? (
+      {selectedBenchmark ? (
         <Card
           className="section-card"
           style={{ marginTop: 16 }}
-          title={`测试用例 · 版本 ${selectedVersion.version}`}
+          title={`种子问题 · ${selectedBenchmark.name}`}
           extra={
             <Space>
               <Input
@@ -423,7 +368,7 @@ export function BenchmarksPage() {
                   type={importResults.some((item) => item.imported_count === 0) ? 'warning' : 'success'}
                   showIcon
                   message="种子导入完成"
-                  description={`共 ${importResults.length} 个文件，成功导入 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条用例。`}
+                  description={`共 ${importResults.length} 个文件，成功导入 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条种子。`}
                 />
                 <Table
                   rowKey="file_name"
@@ -447,7 +392,6 @@ export function BenchmarksPage() {
                           '-'
                         ),
                     },
-                    { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 90 },
                     { title: '成功', dataIndex: 'imported_count', width: 80 },
                     { title: '失败', dataIndex: 'failed_count', width: 80 },
                     {
@@ -497,23 +441,9 @@ export function BenchmarksPage() {
 
             {!hasImportResult && importTarget === 'seed' ? (
               <Form form={form} layout="vertical">
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item name="name" label="种子库名称" rules={[{ required: true }]}>
-                      <Input placeholder="例如：中文有害问题集" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item
-                      name="version"
-                      label="版本"
-                      rules={fileList.length > 1 ? [] : [{ required: true }]}
-                      extra={fileList.length > 1 ? '已选择多个文件，将按各自文件名自动生成版本号' : undefined}
-                    >
-                      <Input placeholder="v1" />
-                    </Form.Item>
-                  </Col>
-                </Row>
+                <Form.Item name="name" label="种子库名称" rules={[{ required: true }]}>
+                  <Input placeholder="例如：中文有害问题集" />
+                </Form.Item>
                 <Form.Item
                   name="source_type"
                   label="数据集结构"
@@ -541,7 +471,7 @@ export function BenchmarksPage() {
                     <p className="ant-upload-text">点击或拖拽种子数据文件到此处（可多选）</p>
                     <p className="ant-upload-hint">
                       支持 JSONL、JSON、CSV；HarmBench / AdvBench / TDC2023 原始 CSV 可直接导入。
-                      可一次选择最多 10 个文件，每个文件导入为一个独立版本
+                      可一次选择最多 10 个文件，全部导入当前种子库
                     </p>
                   </Dragger>
                 </Form.Item>

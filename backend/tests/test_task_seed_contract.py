@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 import app.db.models  # noqa: F401
 from app.db.base import Base
-from app.db.models import AttackTemplate, Benchmark, BenchmarkVersion, ModelRegistry, TestCase
+from app.db.models import AttackTemplate, Benchmark, ModelRegistry, TestCase
 from app.schemas.requests import EvaluationTaskCreateRequest
 from app.services.domain import TaskService
 from app.services.execution import TaskExecutionService
@@ -34,10 +34,10 @@ def _payload(**overrides):
     return EvaluationTaskCreateRequest(**data)
 
 
-def test_payload_requires_seed_or_version() -> None:
+def test_payload_requires_seed_or_benchmark() -> None:
     assert _payload().seed_test_case_ids == [1]
     with pytest.raises(ValidationError):
-        _payload(seed_test_case_ids=[], benchmark_version_id=None)
+        _payload(seed_test_case_ids=[], benchmark_id=None)
 
 
 def test_create_task_with_seed_ids() -> None:
@@ -47,12 +47,9 @@ def test_create_task_with_seed_ids() -> None:
         benchmark = Benchmark(name="b", slug="b", source_type="local")
         session.add(benchmark)
         session.flush()
-        version = BenchmarkVersion(benchmark_id=benchmark.id, version="v1", status="ready")
-        session.add(version)
-        session.flush()
         seeds = [
-            TestCase(benchmark_version_id=version.id, external_id="s1", prompt="问题1", status="active"),
-            TestCase(benchmark_version_id=version.id, external_id="s2", prompt="问题2", status="active"),
+            TestCase(benchmark_id=benchmark.id, external_id="s1", prompt="问题1", status="active"),
+            TestCase(benchmark_id=benchmark.id, external_id="s2", prompt="问题2", status="active"),
         ]
         model = ModelRegistry(
             name="m",
@@ -73,7 +70,7 @@ def test_create_task_with_seed_ids() -> None:
         )
         session.commit()
 
-        assert task.benchmark_version_id is None
+        assert task.benchmark_id is None
         assert task.config["seed_test_case_ids"] == [seeds[0].id, seeds[1].id]
 
 
@@ -93,12 +90,9 @@ def test_expand_task_uses_selected_seeds() -> None:
         benchmark = Benchmark(name="b2", slug="b2", source_type="local")
         session.add(benchmark)
         session.flush()
-        version = BenchmarkVersion(benchmark_id=benchmark.id, version="v1", status="ready")
-        session.add(version)
-        session.flush()
         seeds = [
-            TestCase(benchmark_version_id=version.id, external_id="x1", prompt="问题A", status="active"),
-            TestCase(benchmark_version_id=version.id, external_id="x2", prompt="问题B", status="active"),
+            TestCase(benchmark_id=benchmark.id, external_id="x1", prompt="问题A", status="active"),
+            TestCase(benchmark_id=benchmark.id, external_id="x2", prompt="问题B", status="active"),
         ]
         model = ModelRegistry(
             name="m2",

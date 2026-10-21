@@ -5,7 +5,6 @@ import app.db.models  # noqa: F401
 from app.db.base import Base
 from app.db.models import (
     Benchmark,
-    BenchmarkVersion,
     EvaluationTask,
     JudgeResult,
     ManualReview,
@@ -48,15 +47,12 @@ def test_judge_profile_crud_and_trust_summary() -> None:
         benchmark = Benchmark(name="judge-bench", slug="judge-bench", source_type="local")
         session.add(benchmark)
         session.flush()
-        version = BenchmarkVersion(benchmark_id=benchmark.id, version="v1", status="ready")
-        session.add(version)
-        session.flush()
-        test_case = TestCase(benchmark_version_id=version.id, external_id="case-1", prompt="测试", status="active")
+        test_case = TestCase(benchmark_id=benchmark.id, external_id="case-1", prompt="测试", status="active")
         session.add(test_case)
         session.flush()
         task = EvaluationTask(
             name="judge-task",
-            benchmark_version_id=version.id,
+            benchmark_id=benchmark.id,
             status="succeeded",
             total_cases=1,
             completed_cases=1,

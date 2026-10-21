@@ -3,7 +3,6 @@ from sqlalchemy import select, update
 from app.db.models import (
     AttackTemplate,
     Benchmark,
-    BenchmarkVersion,
     EvaluationTask,
     JudgeProfile,
     JudgeResult,
@@ -24,10 +23,6 @@ from app.repositories.base import BaseRepository
 
 class BenchmarkRepository(BaseRepository[Benchmark]):
     model = Benchmark
-
-
-class BenchmarkVersionRepository(BaseRepository[BenchmarkVersion]):
-    model = BenchmarkVersion
 
 
 class TestCaseRepository(BaseRepository[TestCase]):

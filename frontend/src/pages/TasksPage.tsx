@@ -36,7 +36,6 @@ import {
   createTask,
   listAttackTemplates,
   listBenchmarks,
-  listBenchmarkVersions,
   listJudgeProfiles,
   listModels,
   listTasks,
@@ -71,7 +70,6 @@ export function TasksPage() {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const seedBenchmarkId = Form.useWatch('seed_benchmark_id', form);
-  const seedBenchmarkVersionId = Form.useWatch('seed_benchmark_version_id', form);
   const selectedSeedIds = Form.useWatch('seed_test_case_ids', form) as number[] | undefined;
   const strategyType = Form.useWatch('strategy_type', form);
   const strategyCode = Form.useWatch('strategy_code', form);
@@ -89,47 +87,24 @@ export function TasksPage() {
     queryKey: ['benchmarks', 'tasks'],
     queryFn: () => listBenchmarks({ page_size: 200 }),
   });
-  const benchmarkVersionsQuery = useQuery({
-    queryKey: ['benchmark-versions', 'tasks', seedBenchmarkId],
-    queryFn: () => listBenchmarkVersions(seedBenchmarkId),
-    enabled: Boolean(seedBenchmarkId),
-  });
-
   useEffect(() => {
-    form.setFieldValue('seed_benchmark_version_id', undefined);
     form.setFieldValue('seed_test_case_ids', []);
     setSeedOptions([]);
     setSeedSearchInput('');
     setSeedKeyword('');
   }, [seedBenchmarkId, form]);
 
-  useEffect(() => {
-    form.setFieldValue('seed_test_case_ids', []);
-    setSeedOptions([]);
-    setSeedSearchInput('');
-    setSeedKeyword('');
-  }, [seedBenchmarkVersionId, form]);
-
-  useEffect(() => {
-    const versions = benchmarkVersionsQuery.data?.items ?? [];
-    if (!versions.length) return;
-    const current = form.getFieldValue('seed_benchmark_version_id');
-    if (!versions.some((item) => item.benchmark_version_id === current)) {
-      form.setFieldValue('seed_benchmark_version_id', versions[0].benchmark_version_id);
-    }
-  }, [benchmarkVersionsQuery.data, form]);
-
   const seedQuery = useQuery({
-    queryKey: ['seed-test-cases', seedBenchmarkVersionId, seedKeyword],
+    queryKey: ['seed-test-cases', seedBenchmarkId, seedKeyword],
     queryFn: () =>
       listTestCases({
-        benchmark_version_id: seedBenchmarkVersionId,
+        benchmark_id: seedBenchmarkId,
         keyword: seedKeyword || undefined,
         status: 'active',
         page: 1,
         page_size: 50,
       }),
-    enabled: open && Boolean(seedBenchmarkVersionId),
+    enabled: open && Boolean(seedBenchmarkId),
   });
 
   useEffect(() => {
@@ -155,8 +130,8 @@ export function TasksPage() {
   );
 
   const selectAllSeeds = async () => {
-    if (!seedBenchmarkVersionId) {
-      message.warning('请先选择种子库和库版本');
+    if (!seedBenchmarkId) {
+      message.warning('请先选择种子库');
       return;
     }
     setSeedBatchLoading(true);
@@ -165,7 +140,7 @@ export function TasksPage() {
       let page = 1;
       for (let guard = 0; guard < 100; guard += 1) {
         const result = await listTestCases({
-          benchmark_version_id: seedBenchmarkVersionId,
+          benchmark_id: seedBenchmarkId,
           status: 'active',
           page,
           page_size: 200,
@@ -406,7 +381,6 @@ export function TasksPage() {
             timeout_seconds: 120,
             concurrency: 4,
             seed_benchmark_id: undefined,
-            seed_benchmark_version_id: undefined,
             seed_test_case_ids: [],
             sample_size: 50,
             seed_dataset_type: undefined,
@@ -427,7 +401,7 @@ export function TasksPage() {
             }
             createMutation.mutate({
               name: values.name,
-              benchmark_version_id: values.seed_benchmark_version_id,
+              benchmark_id: values.seed_benchmark_id,
               seed_test_case_ids: values.seed_test_case_ids ?? [],
               sample_size: values.sample_size ?? 50,
               model_bindings: (values.model_ids ?? []).map((modelId: number) => ({
@@ -464,7 +438,7 @@ export function TasksPage() {
           </Form.Item>
 
           <Row gutter={16}>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item
                 name="seed_benchmark_id"
                 label="种子库"
@@ -482,24 +456,7 @@ export function TasksPage() {
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>
-              <Form.Item
-                name="seed_benchmark_version_id"
-                label="库版本"
-                rules={[{ required: true, message: '请选择库版本' }]}
-              >
-                <Select
-                  placeholder="选择库版本"
-                  disabled={!seedBenchmarkId}
-                  loading={benchmarkVersionsQuery.isLoading}
-                  options={(benchmarkVersionsQuery.data?.items ?? []).map((item) => ({
-                    value: item.benchmark_version_id,
-                    label: `${item.version} · ${item.case_count} 条`,
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
+            <Col span={12}>
               <Form.Item
                 name="sample_size"
                 label="自动采样条数"
@@ -530,8 +487,8 @@ export function TasksPage() {
                 maxTagCount="responsive"
                 filterOption={false}
                 style={{ flex: 1 }}
-                placeholder={seedBenchmarkVersionId ? '搜索或选择种子问题' : '请先选择种子库和版本'}
-                disabled={!seedBenchmarkVersionId}
+                placeholder={seedBenchmarkId ? '搜索或选择种子问题' : '请先选择种子库'}
+                disabled={!seedBenchmarkId}
                 loading={seedQuery.isFetching}
                 onSearch={setSeedSearchInput}
                 options={seedSelectOptions}
@@ -546,7 +503,7 @@ export function TasksPage() {
               <Button
                 icon={<CheckSquareOutlined />}
                 loading={seedBatchLoading}
-                disabled={!seedBenchmarkVersionId}
+                disabled={!seedBenchmarkId}
                 onClick={selectAllSeeds}
               >
                 全选当前库

@@ -6,7 +6,7 @@ from sqlalchemy import select
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
-from app.db.models import Benchmark, BenchmarkVersion, ModelRegistry, RiskTaxonomy, TestCase  # noqa: E402
+from app.db.models import Benchmark, ModelRegistry, TestCase  # noqa: E402
 from app.db.session import SessionLocal  # noqa: E402
 
 
@@ -24,30 +24,16 @@ def get_or_create(session, model, defaults=None, **filters):
 
 def main() -> None:
     with SessionLocal() as session:
-        taxonomy = get_or_create(
-            session,
-            RiskTaxonomy,
-            name="demo-risk-taxonomy",
-            version="v1",
-            defaults={"description": "Demo taxonomy", "is_default": True},
-        )
         benchmark = get_or_create(
             session,
             Benchmark,
             slug="demo-benchmark",
             defaults={"name": "Demo Benchmark", "source_type": "local", "status": "active"},
         )
-        version = get_or_create(
-            session,
-            BenchmarkVersion,
-            benchmark_id=benchmark.id,
-            version="v1",
-            defaults={"status": "ready", "case_count": 1},
-        )
         test_case = get_or_create(
             session,
             TestCase,
-            benchmark_version_id=version.id,
+            benchmark_id=benchmark.id,
             external_id="demo-case-001",
             defaults={
                 "prompt": "请输出一个安全的测试回复",
@@ -70,9 +56,8 @@ def main() -> None:
         session.commit()
 
         print("seed_ready")
-        print(f"risk_taxonomy_id={taxonomy.id}")
         print(f"benchmark_id={benchmark.id}")
-        print(f"benchmark_version_id={version.id}")
+        print(f"test_case_id={test_case.id}")
         print(f"test_case_id={test_case.id}")
         print(f"model_id={model.id}")
 
