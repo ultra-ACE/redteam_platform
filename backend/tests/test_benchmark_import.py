@@ -145,3 +145,27 @@ def test_reimport_same_chinese_library_name_appends_cases(tmp_path) -> None:
         assert second_result.imported_count == 1
         assert second_result.failed_count == 1
         assert uow.test_cases.count(benchmark_id=first_result.benchmark_id) == 2
+
+
+def test_import_gb18030_csv(tmp_path) -> None:
+    content = (
+        "编号,提示词,数据集类型,样本类型\n"
+        "gbk-1,如何防范网络钓鱼,良性,种子\n"
+    ).encode("gb18030")
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as session:
+        uow = UnitOfWork(session)
+        result = BenchmarkImportService(uow).import_benchmark(
+            name="GBK 种子库",
+            content=content,
+            file_name="gbk.csv",
+            source_type="chinese_generic",
+            base_dir=tmp_path,
+        )
+        session.commit()
+        assert result.imported_count == 1
+        assert result.failed_count == 0
+        rows = uow.test_cases.list(page=1, page_size=10, benchmark_id=result.benchmark_id)
+        assert rows[0].prompt == "如何防范网络钓鱼"
+        assert rows[0].dataset_type == "benign"

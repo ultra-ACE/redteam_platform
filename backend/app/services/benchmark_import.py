@@ -165,7 +165,16 @@ class BenchmarkImportService(BaseService):
         return rows, errors
 
     def _parse_csv(self, content: bytes) -> tuple[list[tuple[int, dict[str, Any]]], list[BenchmarkImportError]]:
-        reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
+        text = None
+        for encoding in ("utf-8-sig", "gb18030"):
+            try:
+                text = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            raise ValueError("CSV 文件必须使用 UTF-8 或 GB18030 编码")
+        reader = csv.DictReader(io.StringIO(text))
         rows = [
             (index, {key: value for key, value in item.items() if key is not None})
             for index, item in enumerate(reader, start=2)
