@@ -6,6 +6,7 @@ from app.db.base import Base
 from app.db.models import (
     Benchmark,
     EvaluationTask,
+    JudgeProfile,
     JudgeResult,
     ManualReview,
     RuleDefinition,
@@ -17,6 +18,7 @@ from app.db.models import (
 )
 from app.schemas.requests import JudgeProfileCreateRequest, JudgeProfileUpdateRequest
 from app.services.judge_management import JudgeManagementService
+from app.services.manual_reviews import ManualReviewService
 from app.services.uow import UnitOfWork
 
 
@@ -125,3 +127,80 @@ def test_judge_profile_crud_and_trust_summary() -> None:
         session.commit()
         assert disabled is not None
         assert disabled.enabled is False
+
+
+def test_auto_manual_review_for_uncertain_judge_is_idempotent() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    with Session(engine, expire_on_commit=False) as session:
+        profile = JudgeProfile(
+            name="uncertain-judge",
+            judge_type="rule",
+            strategy="keyword",
+            params={},
+            enabled=True,
+        )
+        benchmark = Benchmark(name="review-bench", slug="review-bench", source_type="local")
+        session.add_all([profile, benchmark])
+        session.flush()
+        test_case = TestCase(
+            benchmark_id=benchmark.id,
+            external_id="review-case",
+            prompt="测试",
+            status="active",
+        )
+        task = EvaluationTask(
+            name="review-task",
+            benchmark_id=benchmark.id,
+            status="succeeded",
+        )
+        session.add_all([test_case, task])
+        session.flush()
+        task_case = TaskCase(
+            task_id=task.id,
+            test_case_id=test_case.id,
+            case_key="review-case:0",
+            status="succeeded",
+        )
+        session.add(task_case)
+        session.flush()
+        attempt = TaskAttempt(
+            task_case_id=task_case.id,
+            model_id=1,
+            attempt_no=1,
+            status="succeeded",
+            output_text="无法确定",
+        )
+        session.add(attempt)
+        session.flush()
+        judge_result = JudgeResult(
+            task_attempt_id=attempt.id,
+            judge_profile_id=profile.id,
+            run_no=1,
+            verdict="uncertain",
+            confidence=0.5,
+            status="succeeded",
+        )
+        session.add(judge_result)
+        session.commit()
+
+        service = ManualReviewService(UnitOfWork(session))
+        summary = service.backfill()
+        session.commit()
+        assert summary == {"scanned": 1, "created": 1}
+        first = service.ensure_for_attempt(attempt.id)
+        session.commit()
+        second = service.ensure_for_attempt(attempt.id)
+        session.commit()
+
+        assert first is not None
+        assert first.trigger_reason == "judge_low_trust"
+        assert first.judge_result_id == judge_result.id
+        assert second is not None
+        assert second.id == first.id
+        assert (
+            session.query(ManualReview)
+            .filter(ManualReview.task_attempt_id == attempt.id)
+            .count()
+            == 1
+        )

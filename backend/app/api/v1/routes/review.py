@@ -41,6 +41,21 @@ async def list_manual_reviews(
     return ok(PaginatedData[ManualReview](items=items, page=page, page_size=page_size, total=total).model_dump())
 
 
+@router.post(
+    "/manual-reviews/backfill",
+    response_model=ApiResponse[dict[str, int]],
+    operation_id="backfillManualReviews",
+)
+async def backfill_manual_reviews(
+    task_id: int | None = Query(default=None),
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    """为历史 Judge/规则结果补建复核记录。"""
+    summary = ManualReviewService(uow).backfill(task_id=task_id)
+    return ok(summary)
+
+
 @router.get(
     "/manual-reviews/{review_id}",
     response_model=ApiResponse[ManualReviewDetail],

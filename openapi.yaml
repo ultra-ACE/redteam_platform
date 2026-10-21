@@ -1513,6 +1513,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/manual-reviews/backfill:
+    post:
+      tags:
+      - 人工复核
+      summary: Backfill Manual Reviews
+      description: 为历史 Judge/规则结果补建复核记录。
+      operationId: backfillManualReviews
+      security:
+      - LocalToken: []
+      parameters:
+      - name: task_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Task Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__int__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/manual-reviews/{review_id}:
     get:
       tags:

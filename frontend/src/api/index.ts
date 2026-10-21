@@ -300,6 +300,15 @@ export const listManualReviews = async (params?: Record<string, unknown>) => {
   return data.data;
 };
 
+export const backfillManualReviews = async (taskId?: number) => {
+  const { data } = await apiClient.post<ApiEnvelope<{ scanned: number; created: number }>>(
+    '/manual-reviews/backfill',
+    undefined,
+    { params: { task_id: taskId } },
+  );
+  return data.data;
+};
+
 export const getManualReview = async (reviewId: number) => {
   const { data } = await apiClient.get<ApiEnvelope<ManualReviewDetail>>(`/manual-reviews/${reviewId}`);
   return data.data;
