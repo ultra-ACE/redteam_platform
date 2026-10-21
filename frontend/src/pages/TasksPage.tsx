@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  CheckSquareOutlined,
+  ClearOutlined,
   EyeOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
@@ -25,6 +27,7 @@ import {
   Space,
   Switch,
   Table,
+  Tag,
   message,
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,6 +35,8 @@ import {
   cancelTask,
   createTask,
   listAttackTemplates,
+  listBenchmarks,
+  listBenchmarkVersions,
   listJudgeProfiles,
   listModels,
   listTasks,
@@ -60,40 +65,71 @@ const STRATEGY_CODES: Record<string, Array<{ value: string; label: string }>> = 
   iterative: [{ value: 'pair', label: 'pair · PAIR 迭代' }],
 };
 
-const DATASET_TYPE_OPTIONS = [
-  { value: 'harmful', label: 'harmful · 有害' },
-  { value: 'benign', label: 'benign · 良性' },
-  { value: 'jailbreak', label: 'jailbreak · 越狱' },
-];
-
 export function TasksPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
-  const seedDatasetType = Form.useWatch('seed_dataset_type', form);
+  const seedBenchmarkId = Form.useWatch('seed_benchmark_id', form);
+  const seedBenchmarkVersionId = Form.useWatch('seed_benchmark_version_id', form);
+  const selectedSeedIds = Form.useWatch('seed_test_case_ids', form) as number[] | undefined;
   const strategyType = Form.useWatch('strategy_type', form);
   const strategyCode = Form.useWatch('strategy_code', form);
   const [seedSearchInput, setSeedSearchInput] = useState('');
   const [seedKeyword, setSeedKeyword] = useState('');
   const [seedOptions, setSeedOptions] = useState<TestCase[]>([]);
+  const [seedBatchLoading, setSeedBatchLoading] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSeedKeyword(seedSearchInput.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [seedSearchInput]);
 
+  const benchmarksQuery = useQuery({
+    queryKey: ['benchmarks', 'tasks'],
+    queryFn: () => listBenchmarks({ page_size: 200 }),
+  });
+  const benchmarkVersionsQuery = useQuery({
+    queryKey: ['benchmark-versions', 'tasks', seedBenchmarkId],
+    queryFn: () => listBenchmarkVersions(seedBenchmarkId),
+    enabled: Boolean(seedBenchmarkId),
+  });
+
+  useEffect(() => {
+    form.setFieldValue('seed_benchmark_version_id', undefined);
+    form.setFieldValue('seed_test_case_ids', []);
+    setSeedOptions([]);
+    setSeedSearchInput('');
+    setSeedKeyword('');
+  }, [seedBenchmarkId, form]);
+
+  useEffect(() => {
+    form.setFieldValue('seed_test_case_ids', []);
+    setSeedOptions([]);
+    setSeedSearchInput('');
+    setSeedKeyword('');
+  }, [seedBenchmarkVersionId, form]);
+
+  useEffect(() => {
+    const versions = benchmarkVersionsQuery.data?.items ?? [];
+    if (!versions.length) return;
+    const current = form.getFieldValue('seed_benchmark_version_id');
+    if (!versions.some((item) => item.benchmark_version_id === current)) {
+      form.setFieldValue('seed_benchmark_version_id', versions[0].benchmark_version_id);
+    }
+  }, [benchmarkVersionsQuery.data, form]);
+
   const seedQuery = useQuery({
-    queryKey: ['seed-test-cases', seedKeyword, seedDatasetType],
+    queryKey: ['seed-test-cases', seedBenchmarkVersionId, seedKeyword],
     queryFn: () =>
       listTestCases({
+        benchmark_version_id: seedBenchmarkVersionId,
         keyword: seedKeyword || undefined,
-        dataset_type: seedDatasetType || undefined,
         status: 'active',
         page: 1,
         page_size: 50,
       }),
-    enabled: open,
+    enabled: open && Boolean(seedBenchmarkVersionId),
   });
 
   useEffect(() => {
@@ -113,10 +149,43 @@ export function TasksPage() {
         value: item.test_case_id,
         label: `${item.external_id} · ${(item.prompt || '').slice(0, 40)}${
           (item.prompt || '').length > 40 ? '…' : ''
-        }`,
+        } · ${item.dataset_type}`,
       })),
     [seedOptions],
   );
+
+  const selectAllSeeds = async () => {
+    if (!seedBenchmarkVersionId) {
+      message.warning('请先选择种子库和库版本');
+      return;
+    }
+    setSeedBatchLoading(true);
+    try {
+      const items: TestCase[] = [];
+      let page = 1;
+      for (let guard = 0; guard < 100; guard += 1) {
+        const result = await listTestCases({
+          benchmark_version_id: seedBenchmarkVersionId,
+          status: 'active',
+          page,
+          page_size: 200,
+        });
+        items.push(...result.items);
+        if (!result.has_next || !result.items.length) break;
+        page += 1;
+      }
+      setSeedOptions(items);
+      form.setFieldValue(
+        'seed_test_case_ids',
+        items.map((item) => item.test_case_id),
+      );
+      message.success(`已选择当前种子库的 ${items.length} 条种子`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '批量选择失败');
+    } finally {
+      setSeedBatchLoading(false);
+    }
+  };
 
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks({ page_size: 200 }) });
   const modelsQuery = useQuery({
@@ -336,6 +405,8 @@ export function TasksPage() {
             repeat: 1,
             timeout_seconds: 120,
             concurrency: 4,
+            seed_benchmark_id: undefined,
+            seed_benchmark_version_id: undefined,
             seed_test_case_ids: [],
             sample_size: 50,
             seed_dataset_type: undefined,
@@ -356,6 +427,7 @@ export function TasksPage() {
             }
             createMutation.mutate({
               name: values.name,
+              benchmark_version_id: values.seed_benchmark_version_id,
               seed_test_case_ids: values.seed_test_case_ids ?? [],
               sample_size: values.sample_size ?? 50,
               model_bindings: (values.model_ids ?? []).map((modelId: number) => ({
@@ -393,43 +465,100 @@ export function TasksPage() {
 
           <Row gutter={16}>
             <Col span={8}>
-              <Form.Item name="seed_dataset_type" label="种子类型">
-                <Select allowClear placeholder="全部类型" options={DATASET_TYPE_OPTIONS} />
-              </Form.Item>
-            </Col>
-            <Col span={16}>
               <Form.Item
-                name="seed_test_case_ids"
-                label="种子问题"
-                extra="输入外部编号或 Prompt 搜索，可多选；不选则按下方采样条数自动抽取"
+                name="seed_benchmark_id"
+                label="种子库"
+                rules={[{ required: true, message: '请选择种子库' }]}
               >
                 <Select
-                  mode="multiple"
-                  allowClear
                   showSearch
-                  filterOption={false}
-                  placeholder="输入关键词搜索种子问题"
-                  loading={seedQuery.isFetching}
-                  onSearch={setSeedSearchInput}
-                  options={seedSelectOptions}
-                  notFoundContent={
-                    seedQuery.isFetching
-                      ? '搜索中…'
-                      : seedKeyword
-                        ? '没有匹配的种子'
-                        : '输入关键词开始搜索'
-                  }
+                  optionFilterProp="label"
+                  placeholder="选择种子库"
+                  loading={benchmarksQuery.isLoading}
+                  options={(benchmarksQuery.data?.items ?? []).map((item) => ({
+                    value: item.benchmark_id,
+                    label: `${item.name}（${item.slug}）`,
+                  }))}
                 />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="seed_benchmark_version_id"
+                label="库版本"
+                rules={[{ required: true, message: '请选择库版本' }]}
+              >
+                <Select
+                  placeholder="选择库版本"
+                  disabled={!seedBenchmarkId}
+                  loading={benchmarkVersionsQuery.isLoading}
+                  options={(benchmarkVersionsQuery.data?.items ?? []).map((item) => ({
+                    value: item.benchmark_version_id,
+                    label: `${item.version} · ${item.case_count} 条`,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="sample_size"
+                label="自动采样条数"
+                extra="未手动选择种子时生效"
+              >
+                <InputNumber min={1} max={100000} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item
-            name="sample_size"
-            label="自动采样条数"
-            extra="未手动选择种子时生效，默认 50 条"
+            name="seed_test_case_ids"
+            label={
+              <Space>
+                种子问题
+                {selectedSeedIds?.length ? (
+                  <Tag color="blue">已选 {selectedSeedIds.length} 条</Tag>
+                ) : null}
+              </Space>
+            }
+            extra="选择种子库后可搜索；点击“全选当前库”批量选择。未选择种子时按采样条数自动抽取"
           >
-            <InputNumber min={1} max={100000} style={{ width: 180 }} />
+            <Space.Compact style={{ width: '100%' }}>
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                maxTagCount="responsive"
+                filterOption={false}
+                style={{ flex: 1 }}
+                placeholder={seedBenchmarkVersionId ? '搜索或选择种子问题' : '请先选择种子库和版本'}
+                disabled={!seedBenchmarkVersionId}
+                loading={seedQuery.isFetching}
+                onSearch={setSeedSearchInput}
+                options={seedSelectOptions}
+                notFoundContent={
+                  seedQuery.isFetching
+                    ? '搜索中…'
+                    : seedKeyword
+                      ? '没有匹配的种子'
+                      : '输入关键词开始搜索'
+                }
+              />
+              <Button
+                icon={<CheckSquareOutlined />}
+                loading={seedBatchLoading}
+                disabled={!seedBenchmarkVersionId}
+                onClick={selectAllSeeds}
+              >
+                全选当前库
+              </Button>
+              <Button
+                icon={<ClearOutlined />}
+                disabled={!selectedSeedIds?.length}
+                onClick={() => form.setFieldValue('seed_test_case_ids', [])}
+              >
+                清空
+              </Button>
+            </Space.Compact>
           </Form.Item>
 
           <Form.Item
