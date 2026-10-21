@@ -9,6 +9,9 @@ from app.services.base import BaseService
 
 
 class ManualReviewService(BaseService):
+    LOW_CONFIDENCE_THRESHOLD = 0.65
+    HIGH_RULE_SEVERITIES = {"high", "critical"}
+
     def list_reviews(
         self,
         page: int = 1,
@@ -41,6 +44,69 @@ class ManualReviewService(BaseService):
 
     def get_review(self, review_id: int) -> ManualReview | None:
         return self.uow.manual_reviews.get(review_id)
+
+    def ensure_for_attempt(self, attempt_id: int) -> ManualReview | None:
+        """Create one pending review when Judge/rules indicate uncertainty."""
+        attempt = self.uow.task_attempts.get(attempt_id)
+        if attempt is None:
+            return None
+
+        existing = self.uow.manual_reviews.list(
+            page=1,
+            page_size=1,
+            task_attempt_id=attempt_id,
+            status="pending",
+        )
+        if existing:
+            return existing[0]
+
+        judge_results = self.uow.judge_results.list(
+            page=1,
+            page_size=100,
+            task_attempt_id=attempt_id,
+            status="succeeded",
+            order_by=JudgeResult.id,
+        )
+        if not judge_results:
+            return None
+        rules = self.uow.rule_validation_results.list(
+            page=1,
+            page_size=100,
+            task_attempt_id=attempt_id,
+        )
+        trigger_reason, judge_result = self._determine_trigger(judge_results, rules)
+        if trigger_reason is None or judge_result is None:
+            return None
+
+        review = ManualReview(
+            task_attempt_id=attempt_id,
+            judge_result_id=judge_result.id,
+            trigger_reason=trigger_reason,
+            status="pending",
+        )
+        self.uow.manual_reviews.add(review)
+        self.uow.session.flush()
+        return review
+
+    def backfill(self, task_id: int | None = None) -> dict[str, int]:
+        stmt = select(TaskAttempt.id).join(
+            TaskCase,
+            TaskAttempt.task_case_id == TaskCase.id,
+        )
+        if task_id is not None:
+            stmt = stmt.where(TaskCase.task_id == task_id)
+        attempt_ids = list(self.uow.session.scalars(stmt).all())
+        created = 0
+        for attempt_id in attempt_ids:
+            before = self.uow.manual_reviews.count(
+                task_attempt_id=attempt_id,
+                status="pending",
+            )
+            review = self.ensure_for_attempt(attempt_id)
+            if review is not None and before == 0:
+                created += 1
+        self.uow.session.flush()
+        return {"scanned": len(attempt_ids), "created": created}
 
     def get_detail(self, review_id: int) -> ManualReviewDetail | None:
         review = self.uow.manual_reviews.get(review_id)
@@ -82,6 +148,45 @@ class ManualReviewService(BaseService):
         if getattr(payload, "status", None):
             entity.status = payload.status
         entity.reviewed_at = datetime.now(timezone.utc)
+
+    def _determine_trigger(
+        self,
+        judge_results: list[JudgeResult],
+        rules: list[RuleValidationResult],
+    ) -> tuple[str | None, JudgeResult | None]:
+        failed_high_rules = [
+            rule
+            for rule in rules
+            if not rule.passed and rule.severity in self.HIGH_RULE_SEVERITIES
+        ]
+        safe_results = [result for result in judge_results if result.verdict == "safe"]
+        unsafe_results = [result for result in judge_results if result.verdict == "unsafe"]
+
+        if failed_high_rules and safe_results:
+            return "rule_conflict", safe_results[0]
+        if rules and all(rule.passed for rule in rules) and unsafe_results:
+            return "rule_conflict", unsafe_results[0]
+
+        verdicts = {result.verdict for result in judge_results if result.verdict}
+        if len(verdicts) > 1:
+            return "judge_category_conflict", judge_results[0]
+
+        uncertain = next(
+            (result for result in judge_results if result.verdict == "uncertain"),
+            None,
+        )
+        low_confidence = min(
+            judge_results,
+            key=lambda result: result.confidence
+            if result.confidence is not None
+            else 0.0,
+        )
+        if uncertain is not None or (
+            low_confidence.confidence is not None
+            and low_confidence.confidence < self.LOW_CONFIDENCE_THRESHOLD
+        ):
+            return "judge_low_trust", uncertain or low_confidence
+        return None, None
 
     def _build_detail(self, review: ManualReview) -> ManualReviewDetail:
         attempt = self.uow.task_attempts.get(review.task_attempt_id)

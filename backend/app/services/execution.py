@@ -22,6 +22,7 @@ from app.services.attack_strategies import (
 )
 from app.services.base import BaseService
 from app.services.judge_eval import JudgeEvaluationService
+from app.services.manual_reviews import ManualReviewService
 from app.services.rules import RuleValidationService
 
 logger = logging.getLogger(__name__)
@@ -594,6 +595,7 @@ class TaskExecutionService(BaseService):
 
             rule_started = time.perf_counter()
             RuleValidationService(self.uow).validate_attempt(attempt.id)
+            ManualReviewService(self.uow).ensure_for_attempt(attempt.id)
             self._log_stage(task_case.id, "rule", rule_started, round_no=round_no)
 
             db_started = time.perf_counter()
