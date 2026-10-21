@@ -11,6 +11,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Segmented,
   Select,
   Space,
   Table,
@@ -34,6 +35,12 @@ import { EmptyPanel, PageHeader } from '../components/ui';
 import { AttackTemplatesPage as AttackTemplatesTab } from './AttackTemplatesPage';
 import type { Benchmark, BenchmarkImportResult, BenchmarkVersion } from '../types/api';
 import { formatDateTime } from '../utils/format';
+import {
+  TEMPLATE_IMPORT_ACCEPT,
+  getErrorMessage,
+  importTemplateFiles,
+} from '../utils/templateImport';
+import type { TemplateImportSummary } from '../utils/templateImport';
 
 const { Dragger } = Upload;
 
@@ -46,8 +53,10 @@ export function BenchmarksPage() {
   const [selectedBenchmark, setSelectedBenchmark] = useState<Benchmark | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<BenchmarkVersion | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [importTarget, setImportTarget] = useState<'seed' | 'template'>('seed');
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [importResults, setImportResults] = useState<Array<BenchmarkImportResult & { file_name: string }>>([]);
+  const [templateImportResult, setTemplateImportResult] = useState<TemplateImportSummary | null>(null);
   const [testCaseKeyword, setTestCaseKeyword] = useState('');
   const [form] = Form.useForm();
 
@@ -104,6 +113,21 @@ export function BenchmarksPage() {
     },
   });
 
+  const templateImportMutation = useMutation({
+    mutationFn: (files: File[]) => importTemplateFiles(files),
+    onSuccess: (result) => {
+      setTemplateImportResult(result);
+      if (result.imported) {
+        message.success(`已导入 ${result.imported} 条模板`);
+      }
+      if (result.errors.length) {
+        message.warning(`${result.errors.length} 条模板导入失败，请查看导入结果`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['attack-templates'] });
+    },
+    onError: (error: unknown) => message.error(getErrorMessage(error)),
+  });
+
   const deleteBenchmarkMutation = useMutation({
     mutationFn: deleteBenchmark,
     onSuccess: (summary) => {
@@ -152,6 +176,7 @@ export function BenchmarksPage() {
 
   const resetImport = () => {
     setImportResults([]);
+    setTemplateImportResult(null);
     setFileList([]);
     form.resetFields();
   };
@@ -161,7 +186,11 @@ export function BenchmarksPage() {
       .map((item) => item.originFileObj)
       .filter((item): item is NonNullable<UploadFile['originFileObj']> => Boolean(item));
     if (!files.length) {
-      message.warning('请选择数据集文件');
+      message.warning(importTarget === 'seed' ? '请选择种子数据文件' : '请选择模板文件');
+      return;
+    }
+    if (importTarget === 'template') {
+      templateImportMutation.mutate(files);
       return;
     }
     form
@@ -188,6 +217,11 @@ export function BenchmarksPage() {
       })
       .catch(() => undefined);
   };
+
+  const hasImportResult =
+    importTarget === 'seed'
+      ? importResults.length > 0
+      : templateImportResult !== null;
 
   // --- 种子管理原本的核心内容 ---
   const seedContent = (
@@ -341,133 +375,197 @@ export function BenchmarksPage() {
       ) : null}
 
       <Modal
-        title="导入 Benchmark"
+        title="导入评测资产"
         open={importOpen}
         width={760}
         onCancel={() => setImportOpen(false)}
         footer={[
           <Button key="cancel" onClick={() => setImportOpen(false)}>关闭</Button>,
-          importResults.length ? (
+          hasImportResult ? (
             <Button key="again" onClick={resetImport}>
               继续导入
             </Button>
           ) : null,
-          <Button key="submit" type="primary" loading={importMutation.isPending} onClick={handleImport}>
-            开始导入
-          </Button>,
+          !hasImportResult ? (
+            <Button
+              key="submit"
+              type="primary"
+              loading={importMutation.isPending || templateImportMutation.isPending}
+              onClick={handleImport}
+            >
+              {importTarget === 'seed' ? '开始导入种子' : '开始导入模板'}
+            </Button>
+          ) : null,
         ]}
         destroyOnClose
       >
-        {importResults.length ? (
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Alert
-              type={importResults.some((item) => item.imported_count === 0) ? 'warning' : 'success'}
-              showIcon
-              message="导入完成"
-              description={`共 ${importResults.length} 个文件，成功导入 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条用例。`}
-            />
-            <Table
-              rowKey="file_name"
-              size="small"
-              pagination={false}
-              dataSource={importResults}
-              columns={[
-                { title: '文件', dataIndex: 'file_name' },
-                {
-                  title: '识别格式',
-                  width: 210,
-                  render: (_, record) =>
-                    record.detected_adapter ? (
-                      <Space direction="vertical" size={0}>
-                        <Tag color="geekblue">{record.adapter_display_name ?? record.detected_adapter}</Tag>
-                        <span style={{ fontSize: 12, color: '#64748b' }}>
-                          {record.detected_adapter} · 置信度 {record.adapter_confidence ?? '-'}
-                        </span>
-                      </Space>
-                    ) : (
-                      '-'
-                    ),
-                },
-                { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 90 },
-                { title: '成功', dataIndex: 'imported_count', width: 80 },
-                { title: '失败', dataIndex: 'failed_count', width: 80 },
-                {
-                  title: '数据集类型分布',
-                  render: (_, record) =>
-                    Object.entries(record.dataset_type_counts ?? {}).map(([key, value]) => (
-                      <Tag key={key} color="blue">{key}: {value}</Tag>
-                    )),
-                },
-              ]}
-            />
-            {importResults.some((item) => item.errors.length) ? (
-              <Table
-                rowKey={(record) => `${record.file_name}-${record.row_number}-${record.message}`}
-                size="small"
-                pagination={false}
-                dataSource={importResults.flatMap((item) =>
-                  item.errors.map((err) => ({ ...err, file_name: item.file_name })),
-                )}
-                columns={[
-                  { title: '文件', dataIndex: 'file_name', width: 220 },
-                  { title: '行号', dataIndex: 'row_number', width: 90 },
-                  { title: '错误', dataIndex: 'message' },
-                ]}
-              />
+        <div>
+          <Segmented
+            block
+            value={importTarget}
+            options={[
+              { label: '种子库', value: 'seed' },
+              { label: '模板库', value: 'template' },
+            ]}
+            onChange={(value) => {
+              setImportTarget(value as 'seed' | 'template');
+              setImportResults([]);
+              setTemplateImportResult(null);
+              setFileList([]);
+              form.resetFields();
+            }}
+          />
+
+          <div style={{ marginTop: 16 }}>
+            {importTarget === 'seed' && importResults.length ? (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <Alert
+                  type={importResults.some((item) => item.imported_count === 0) ? 'warning' : 'success'}
+                  showIcon
+                  message="种子导入完成"
+                  description={`共 ${importResults.length} 个文件，成功导入 ${importResults.reduce((sum, item) => sum + item.imported_count, 0)} 条用例。`}
+                />
+                <Table
+                  rowKey="file_name"
+                  size="small"
+                  pagination={false}
+                  dataSource={importResults}
+                  columns={[
+                    { title: '文件', dataIndex: 'file_name' },
+                    {
+                      title: '识别格式',
+                      width: 210,
+                      render: (_, record) =>
+                        record.detected_adapter ? (
+                          <Space direction="vertical" size={0}>
+                            <Tag color="geekblue">{record.adapter_display_name ?? record.detected_adapter}</Tag>
+                            <span style={{ fontSize: 12, color: '#64748b' }}>
+                              {record.detected_adapter} · 置信度 {record.adapter_confidence ?? '-'}
+                            </span>
+                          </Space>
+                        ) : (
+                          '-'
+                        ),
+                    },
+                    { title: '版本 ID', dataIndex: 'benchmark_version_id', width: 90 },
+                    { title: '成功', dataIndex: 'imported_count', width: 80 },
+                    { title: '失败', dataIndex: 'failed_count', width: 80 },
+                    {
+                      title: '数据集类型分布',
+                      render: (_, record) =>
+                        Object.entries(record.dataset_type_counts ?? {}).map(([key, value]) => (
+                          <Tag key={key} color="blue">{key}: {value}</Tag>
+                        )),
+                    },
+                  ]}
+                />
+                {importResults.some((item) => item.errors.length) ? (
+                  <Table
+                    rowKey={(record) => `${record.file_name}-${record.row_number}-${record.message}`}
+                    size="small"
+                    pagination={false}
+                    dataSource={importResults.flatMap((item) =>
+                      item.errors.map((err) => ({ ...err, file_name: item.file_name })),
+                    )}
+                    columns={[
+                      { title: '文件', dataIndex: 'file_name', width: 220 },
+                      { title: '行号', dataIndex: 'row_number', width: 90 },
+                      { title: '错误', dataIndex: 'message' },
+                    ]}
+                  />
+                ) : null}
+              </Space>
             ) : null}
-          </Space>
-        ) : (
-          <Form form={form} layout="vertical">
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="name" label="Benchmark 名称" rules={[{ required: true }]}>
-                  <Input placeholder="例如：AdvBench" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
+
+            {importTarget === 'template' && templateImportResult ? (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <Alert
+                  type={templateImportResult.errors.length ? 'warning' : 'success'}
+                  showIcon
+                  message="模板导入完成"
+                  description={`成功导入 ${templateImportResult.imported} 条模板，失败 ${templateImportResult.errors.length} 条。`}
+                />
+                {templateImportResult.errors.length ? (
+                  <div style={{ maxHeight: 220, overflow: 'auto' }}>
+                    {templateImportResult.errors.map((item) => (
+                      <div key={item} style={{ padding: '6px 0', color: '#b45309' }}>{item}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </Space>
+            ) : null}
+
+            {!hasImportResult && importTarget === 'seed' ? (
+              <Form form={form} layout="vertical">
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item name="name" label="种子库名称" rules={[{ required: true }]}>
+                      <Input placeholder="例如：中文有害问题集" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      name="version"
+                      label="版本"
+                      rules={fileList.length > 1 ? [] : [{ required: true }]}
+                      extra={fileList.length > 1 ? '已选择多个文件，将按各自文件名自动生成版本号' : undefined}
+                    >
+                      <Input placeholder="v1" />
+                    </Form.Item>
+                  </Col>
+                </Row>
                 <Form.Item
-                  name="version"
-                  label="版本"
-                  rules={fileList.length > 1 ? [] : [{ required: true }]}
-                  extra={fileList.length > 1 ? '已选择多个文件，将按各自文件名自动生成版本号' : undefined}
+                  name="source_type"
+                  label="数据集结构"
+                  extra="默认自动识别。HarmBench、AdvBench、TDC2023 的原始 CSV 可直接导入，无需事先转换"
                 >
-                  <Input placeholder="v1" />
+                  <Select
+                    allowClear
+                    placeholder="自动识别（按表头签名）"
+                    options={(adaptersQuery.data ?? []).map((item) => ({
+                      value: item.name,
+                      label: `${item.display_name}（${item.name}）`,
+                    }))}
+                  />
                 </Form.Item>
-              </Col>
-            </Row>
-            <Form.Item
-              name="source_type"
-              label="数据集结构"
-              extra="默认自动识别。HarmBench、AdvBench、TDC2023 的原始 CSV 可直接导入，无需事先转换"
-            >
-              <Select
-                allowClear
-                placeholder="自动识别（按表头签名）"
-                options={(adaptersQuery.data ?? []).map((item) => ({
-                  value: item.name,
-                  label: `${item.display_name}（${item.name}）`,
-                }))}
-              />
-            </Form.Item>
-            <Form.Item label="数据集文件" required>
+                <Form.Item label="种子数据文件" required>
+                  <Dragger
+                    beforeUpload={() => false}
+                    multiple
+                    maxCount={10}
+                    fileList={fileList}
+                    onChange={({ fileList: next }) => setFileList(next)}
+                    accept=".jsonl,.ndjson,.json,.csv"
+                  >
+                    <p className="ant-upload-drag-icon"><InboxOutlined /></p>
+                    <p className="ant-upload-text">点击或拖拽种子数据文件到此处（可多选）</p>
+                    <p className="ant-upload-hint">
+                      支持 JSONL、JSON、CSV；HarmBench / AdvBench / TDC2023 原始 CSV 可直接导入。
+                      可一次选择最多 10 个文件，每个文件导入为一个独立版本
+                    </p>
+                  </Dragger>
+                </Form.Item>
+              </Form>
+            ) : null}
+
+            {!hasImportResult && importTarget === 'template' ? (
               <Dragger
                 beforeUpload={() => false}
                 multiple
                 maxCount={10}
                 fileList={fileList}
                 onChange={({ fileList: next }) => setFileList(next)}
-                accept=".jsonl,.ndjson,.json,.csv"
+                accept={TEMPLATE_IMPORT_ACCEPT}
               >
                 <p className="ant-upload-drag-icon"><InboxOutlined /></p>
-                <p className="ant-upload-text">点击或拖拽数据集文件到此处（可多选）</p>
+                <p className="ant-upload-text">点击或拖拽模板文件到此处（可多选）</p>
                 <p className="ant-upload-hint">
-                  支持 JSONL、JSON、CSV；HarmBench / AdvBench / TDC2023 原始 CSV 可直接导入，无需事先转换。
-                  可一次选择最多 10 个文件，每个文件导入为一个独立版本
+                  支持 JSON、JSONL、NDJSON、TXT。JSON 字段为 name、template_text、variables、version、status；TXT 每行一条模板。
                 </p>
               </Dragger>
-            </Form.Item>
-          </Form>
-        )}
+            ) : null}
+          </div>
+        </div>
       </Modal>
     </>
   );
@@ -486,13 +584,15 @@ export function BenchmarksPage() {
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
+                setImportTarget('seed');
                 setImportResults([]);
+                setTemplateImportResult(null);
                 setFileList([]);
                 form.resetFields();
                 setImportOpen(true);
               }}
             >
-              导入 Benchmark
+              导入数据
             </Button>
           </Space>
         }
