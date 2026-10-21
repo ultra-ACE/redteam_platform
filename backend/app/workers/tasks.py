@@ -1,7 +1,6 @@
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+import time
 
 from app.db.session import SessionLocal
 from app.services import (
@@ -17,20 +16,18 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-def _run_async(coro: Any) -> Any:
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result()
+def _elapsed_ms(started: float) -> int:
+    return int((time.perf_counter() - started) * 1000)
 
 
-async def _run_task_case_async(task_case_id: int, celery_task_id: str | None) -> int | None:
+def _run_task_case(task_case_id: int, celery_task_id: str | None) -> int | None:
+    """PAIR 用例必须同步执行（每轮 Judge 内部会 asyncio.run），普通用例走异步链路。"""
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         service = TaskExecutionService(uow)
-        return await service.run_task_case(task_case_id, celery_task_id=celery_task_id)
+        if service.requires_iterative(task_case_id):
+            return service.run_iterative_task_case(task_case_id, celery_task_id=celery_task_id)
+        return asyncio.run(service.run_task_case(task_case_id, celery_task_id=celery_task_id))
 
 
 @celery_app.task(name="workers.dispatch_task")
@@ -41,11 +38,18 @@ def dispatch_task(task_id: int) -> None:
 
 @celery_app.task(name="workers.execute_task")
 def execute_task(task_id: int) -> list[int]:
+    started = time.perf_counter()
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         service = TaskExecutionService(uow)
         all_case_ids = service.expand_task(task_id)
         uow.commit()
+    logger.info(
+        "task=%s stage=expand elapsed_ms=%d cases=%d",
+        task_id,
+        _elapsed_ms(started),
+        len(all_case_ids),
+    )
 
     # 只派发 pending 状态的用例；已成功/已失败/已取消不重跑
     with SessionLocal() as session:
@@ -117,8 +121,15 @@ def execute_failed_task(task_id: int) -> list[int]:
 
 @celery_app.task(name="workers.run_task_case", bind=True)
 def run_task_case(self, task_case_id: int) -> int | None:
+    started = time.perf_counter()
     celery_task_id = getattr(self.request, "id", None)
-    attempt_id = _run_async(_run_task_case_async(task_case_id, celery_task_id))
+    attempt_id = _run_task_case(task_case_id, celery_task_id)
+    logger.info(
+        "task_case=%s stage=worker_total elapsed_ms=%d attempt_id=%s",
+        task_case_id,
+        _elapsed_ms(started),
+        attempt_id,
+    )
     if attempt_id is not None:
         judge_attempt.delay(attempt_id)
     return attempt_id
@@ -126,29 +137,48 @@ def run_task_case(self, task_case_id: int) -> int | None:
 
 @celery_app.task(name="workers.judge_attempt")
 def judge_attempt(attempt_id: int) -> None:
+    started = time.perf_counter()
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         service = JudgeEvaluationService(uow)
         service.evaluate_attempt(attempt_id)
         uow.commit()
+    logger.info(
+        "attempt=%s stage=judge elapsed_ms=%d",
+        attempt_id,
+        _elapsed_ms(started),
+    )
     validate_rules.delay(attempt_id)
 
 
 @celery_app.task(name="workers.validate_rules")
 def validate_rules(attempt_id: int) -> None:
     report_id: int | None = None
+    started = time.perf_counter()
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         RuleValidationService(uow).validate_attempt(attempt_id)
+        rule_elapsed = _elapsed_ms(started)
         attempt = uow.task_attempts.get(attempt_id)
         task_case = uow.task_cases.get(attempt.task_case_id) if attempt else None
         if task_case is not None:
             # 规则处理结束后清空 celery_task_id，表示这次调度完成
             task_case.celery_task_id = None
+            db_started = time.perf_counter()
             report, created = ReportAutomationService(uow).ensure_auto_report(task_case.task_id)
+            uow.commit()
+            db_elapsed = _elapsed_ms(db_started)
             if created and report is not None:
                 report_id = report.id
-        uow.commit()
+        else:
+            uow.commit()
+            db_elapsed = 0
+    logger.info(
+        "attempt=%s stage=rule elapsed_ms=%d stage=db_finalize elapsed_ms=%d",
+        attempt_id,
+        rule_elapsed,
+        db_elapsed,
+    )
     if report_id is not None:
         generate_report.delay(report_id)
 
