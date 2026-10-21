@@ -4,8 +4,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import func, select
+
 from app.core.config import settings
-from app.db.models import Report, StoredFile
+from app.db.models import Report, StoredFile, TaskCase
 from app.services.base import BaseService
 from app.services.results import EvaluationResultService
 from app.services.statistics import StatisticsService
@@ -208,12 +210,25 @@ class ReportAutomationService(BaseService):
         task = self.uow.evaluation_tasks.get(task_id)
         if task is None:
             return None, False
-        task_cases = self.uow.task_cases.list(page=1, page_size=100000, task_id=task_id)
-        if not task_cases:
+
+        # 性能修复（T8）：这里原来每次都会 list 全量 task_cases 再逐条判断，
+        # 而它会在每条结果完成规则校验后被调用一次，结果数一多就是 O(n²) 扫描。
+        # 现在只依赖主任务计数 + 一条 COUNT 查询。
+        total = task.total_cases or self.uow.task_cases.count(task_id=task_id)
+        if total <= 0:
             return None, False
-        terminal = {"succeeded", "failed", "cancelled", "skipped"}
-        if any(task_case.status not in terminal for task_case in task_cases):
+        terminal = ["succeeded", "failed", "cancelled", "skipped"]
+        terminal_count = int(
+            self.uow.session.scalar(
+                select(func.count())
+                .select_from(TaskCase)
+                .where(TaskCase.task_id == task_id, TaskCase.status.in_(terminal))
+            )
+            or 0
+        )
+        if terminal_count < total:
             return None, False
+
         existing = self.uow.reports.list(
             page=1,
             page_size=1,
