@@ -19,7 +19,7 @@ import {
   listJudgeProfiles,
   listModels,
   listTasks,
-  listTestCases, // 新增：用于拉取种子问题列表
+  listTestCases,
   pauseTask,
   resumeTask,
   retryFailedTask,
@@ -37,13 +37,10 @@ export function TasksPage() {
 
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks({ page_size: 200 }) });
   const modelsQuery = useQuery({ queryKey: ['models', 'tasks'], queryFn: () => listModels({ page_size: 200 }) });
-
-  // 新增：拉取种子问题列表（暂时拉取前 200 条，后续等 T5 做搜索接口再优化）
   const testCasesQuery = useQuery({
     queryKey: ['test-cases', 'tasks'],
     queryFn: () => listTestCases({ page_size: 200 }),
   });
-
   const templatesQuery = useQuery({
     queryKey: ['attack-templates', 'tasks'],
     queryFn: () => listAttackTemplates({ page_size: 200 }),
@@ -158,54 +155,27 @@ export function TasksPage() {
                   详情
                 </Button>
                 {record.status === 'draft' ? (
-                  <Button
-                    type="link"
-                    icon={<ThunderboltOutlined />}
-                    loading={startMutation.isPending}
-                    onClick={() => startMutation.mutate(record.task_id)}
-                  >
+                  <Button type="link" icon={<ThunderboltOutlined />} loading={startMutation.isPending} onClick={() => startMutation.mutate(record.task_id)}>
                     启动
                   </Button>
                 ) : null}
                 {canPause(record.status) ? (
-                  <Button
-                    type="link"
-                    icon={<PauseCircleOutlined />}
-                    loading={pauseMutation.isPending}
-                    onClick={() => pauseMutation.mutate(record.task_id)}
-                  >
+                  <Button type="link" icon={<PauseCircleOutlined />} loading={pauseMutation.isPending} onClick={() => pauseMutation.mutate(record.task_id)}>
                     暂停
                   </Button>
                 ) : null}
                 {canResume(record.status) ? (
-                  <Button
-                    type="link"
-                    icon={<PlayCircleOutlined />}
-                    loading={resumeMutation.isPending}
-                    onClick={() => resumeMutation.mutate(record.task_id)}
-                  >
+                  <Button type="link" icon={<PlayCircleOutlined />} loading={resumeMutation.isPending} onClick={() => resumeMutation.mutate(record.task_id)}>
                     继续
                   </Button>
                 ) : null}
                 {record.status === 'failed' || record.status === 'partially_failed' ? (
-                  <Button
-                    type="link"
-                    icon={<RedoOutlined />}
-                    loading={retryMutation.isPending}
-                    onClick={() => retryMutation.mutate(record.task_id)}
-                  >
+                  <Button type="link" icon={<RedoOutlined />} loading={retryMutation.isPending} onClick={() => retryMutation.mutate(record.task_id)}>
                     重试失败
                   </Button>
                 ) : null}
                 {canCancel(record.status) ? (
-                  <Popconfirm
-                    title="确定要取消该任务吗？"
-                    description="取消后无法恢复，已跑的用例将保留。"
-                    onConfirm={() => cancelMutation.mutate(record.task_id)}
-                    okText="确定"
-                    cancelText="再想想"
-                    okButtonProps={{ danger: true }}
-                  >
+                  <Popconfirm title="确定要取消该任务吗？" description="取消后无法恢复，已跑的用例将保留。" onConfirm={() => cancelMutation.mutate(record.task_id)} okText="确定" cancelText="再想想" okButtonProps={{ danger: true }}>
                     <Button type="link" danger icon={<StopOutlined />} loading={cancelMutation.isPending}>
                       取消
                     </Button>
@@ -217,67 +187,56 @@ export function TasksPage() {
         ]}
       />
 
-      <Modal
-        title="创建评测任务"
-        open={open}
-        width={720}
-        onCancel={() => setOpen(false)}
-        onOk={() => form.submit()}
-        confirmLoading={createMutation.isPending}
-        destroyOnClose
-      >
+      <Modal title="创建评测任务" open={open} width={720} onCancel={() => setOpen(false)} onOk={() => form.submit()} confirmLoading={createMutation.isPending} destroyOnClose>
         <Form
           form={form}
           layout="vertical"
-          initialValues={{
-            model_ids: [],
-            repeat: 1,
-            timeout_seconds: 120,
-            concurrency: 2,
-          }}
+          initialValues={{ model_ids: [], repeat: 1, timeout_seconds: 120, concurrency: 2 }}
           onFinish={(values) => {
-            // 🚨 强行绕过前端类型检查，因为组长还没改 types/api.ts
+            // 🚨 强行绕过前端类型检查
             const payload = values as any;
+
+            // T7 核心逻辑：处理模型绑定。如果是 PAIR 策略，把 attacker_model_id 也作为绑定塞进去
+            const modelBindings = (payload.model_ids ?? []).map((modelId: number) => ({
+              model_id: modelId,
+              role: 'target',
+              model_params: { temperature: 0.2, max_tokens: 1024 },
+            }));
+
+            if (payload.attacker_model_id) {
+              modelBindings.push({
+                model_id: payload.attacker_model_id,
+                role: 'attacker',
+                model_params: { temperature: 0.2, max_tokens: 1024 },
+              });
+            }
 
             createMutation.mutate({
               name: payload.name,
-              // 核心修改：使用 seed_test_case_ids 替换 benchmark_version_id
               seed_test_case_ids: payload.seed_test_case_ids,
-              model_bindings: (payload.model_ids ?? []).map((modelId: number) => ({
-                model_id: modelId,
-                role: 'target',
-                model_params: {
-                  temperature: payload.temperature ?? 0.2,
-                  max_tokens: payload.max_tokens ?? 1024,
-                },
-              })),
+              model_bindings: modelBindings,
               attack_template_ids: payload.attack_template_ids ?? [],
               judge_profile_ids: payload.judge_profile_ids ?? [],
               rule_set_ids: [],
+              strategy_types: payload.strategy_types ?? [], // T6 新增字段
               execution: {
                 repeat: payload.repeat,
                 timeout_seconds: payload.timeout_seconds,
                 retry: { max_attempts: 1, backoff_seconds: 3 },
                 concurrency: payload.concurrency,
               },
-            });
+            } as any); // 强行绕过类型检查
           }}
         >
           <Form.Item name="name" label="任务名称" rules={[{ required: true }]}>
             <Input placeholder="例如：Qwen2.5-7B 越狱基线评测" />
           </Form.Item>
 
-          {/* 核心修改：把原来的 Benchmark 换成了种子问题多选 */}
-          <Form.Item
-            name="seed_test_case_ids"
-            label="种子问题"
-            rules={[{ required: true, type: 'array', min: 1, message: '请至少选择一个种子问题' }]}
-          >
+          <Form.Item name="seed_test_case_ids" label="种子问题" rules={[{ required: true, type: 'array', min: 1, message: '请至少选择一个种子问题' }]}>
             <Select
               mode="multiple"
               placeholder="选择一个或多个种子问题"
               loading={testCasesQuery.isLoading}
-              // 截取前 50 个字符展示，避免下拉框太宽
               options={(testCasesQuery.data?.items ?? []).map((item) => ({
                 value: item.test_case_id,
                 label: `[${item.test_case_id}] ${item.prompt.slice(0, 50)}...`,
@@ -285,11 +244,7 @@ export function TasksPage() {
             />
           </Form.Item>
 
-          <Form.Item
-            name="model_ids"
-            label="被测模型"
-            rules={[{ required: true, type: 'array', min: 1, message: '请至少选择一个被测模型' }]}
-          >
+          <Form.Item name="model_ids" label="被测模型" rules={[{ required: true, type: 'array', min: 1, message: '请至少选择一个被测模型' }]}>
             <Select
               mode="multiple"
               placeholder="选择一个或多个模型进行对比"
@@ -298,11 +253,8 @@ export function TasksPage() {
                 .map((item) => ({ value: item.model_id, label: `${item.name} · ${item.adapter_type}` }))}
             />
           </Form.Item>
-          <Form.Item
-            name="attack_template_ids"
-            label="攻击模板"
-            extra="不选则使用原始 Prompt 直接请求（相当于 direct_request 基线）"
-          >
+
+          <Form.Item name="attack_template_ids" label="攻击模板" extra="不选则使用原始 Prompt 直接请求（相当于 direct_request 基线）">
             <Select
               mode="multiple"
               allowClear
@@ -314,11 +266,33 @@ export function TasksPage() {
               }))}
             />
           </Form.Item>
-          <Form.Item
-            name="judge_profile_ids"
-            label="Judge 配置"
-            extra="不选则只使用引擎内置的默认规则 Judge"
-          >
+
+          {/* 👇 T6：新增攻击策略多选 👇 */}
+          <Form.Item name="strategy_types" label="变换/迭代攻击策略" extra="Base64/Puzzler 为静态变换，PAIR 为多轮迭代优化">
+            <Select
+              mode="multiple"
+              allowClear
+              placeholder="请选择攻击策略（不选则默认基础策略）"
+              options={[
+                { value: 'base64', label: 'Base64 编码变换' },
+                { value: 'puzzler', label: 'Puzzler 谜题改写' },
+                { value: 'pair', label: 'PAIR 迭代优化' },
+              ]}
+            />
+          </Form.Item>
+
+          {/* 👇 T7：新增攻击模型 Attacker 选择 👇 */}
+          <Form.Item name="attacker_model_id" label="攻击模型（Attacker）" extra="仅在选择了 PAIR 策略时生效，用于生成对抗 Prompt">
+            <Select
+              allowClear
+              placeholder="选择一个模型作为 Attacker"
+              options={(modelsQuery.data?.items ?? [])
+                .filter((item) => item.usage_scope === 'target' || item.usage_scope === 'both')
+                .map((item) => ({ value: item.model_id, label: `${item.name} · ${item.adapter_type}` }))}
+            />
+          </Form.Item>
+
+          <Form.Item name="judge_profile_ids" label="Judge 配置" extra="不选则只使用引擎内置的默认规则 Judge">
             <Select
               mode="multiple"
               allowClear
