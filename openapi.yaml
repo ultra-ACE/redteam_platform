@@ -205,6 +205,22 @@ paths:
           - type: string
           - type: 'null'
           title: Status
+      - name: dataset_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Dataset Type
+      - name: keyword
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Keyword
       responses:
         '200':
           description: Successful Response
@@ -2620,6 +2636,7 @@ components:
     AttackMethodCode:
       type: string
       enum:
+      - custom
       - direct_request
       - role_play
       - prefix_injection
@@ -2662,6 +2679,7 @@ components:
       properties:
         method_code:
           $ref: '#/components/schemas/AttackMethodCode'
+          default: custom
         name:
           type: string
           title: Name
@@ -2683,7 +2701,6 @@ components:
           default: active
       type: object
       required:
-      - method_code
       - name
       - template_text
       title: AttackTemplateCreateRequest

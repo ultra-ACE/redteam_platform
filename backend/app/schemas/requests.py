@@ -46,7 +46,7 @@ class ModelUpdateRequest(BaseModel):
 
 
 class AttackTemplateCreateRequest(BaseModel):
-    method_code: AttackMethodCode
+    method_code: AttackMethodCode = AttackMethodCode.custom
     name: str
     template_text: str
     variables: list[str] = Field(default_factory=list)
