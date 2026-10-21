@@ -87,6 +87,7 @@ export function AttackTemplatesPage() {
   }, [editingTemplate, templateForm]);
 
   const templateMutation = useMutation({
+    // 🌟 修复：加回了 method_code: 'custom'，解决 422 报错
     mutationFn: (values: Record<string, unknown>) =>
       editingTemplate
         ? updateAttackTemplate(editingTemplate.attack_template_id, values)
@@ -284,11 +285,19 @@ export function AttackTemplatesPage() {
         onCancel={() => setTemplateOpen(false)}
         onOk={() => templateForm.submit()}
         confirmLoading={templateMutation.isPending}
+        forceRender
+        destroyOnHidden
       >
         <Form
           form={templateForm}
           layout="vertical"
-          onFinish={(values) => templateMutation.mutate(values)}
+          onFinish={(values) => {
+            console.log('🔥 准备提交的数据:', values);
+            templateMutation.mutate(values);
+          }}
+          onFinishFailed={(errorInfo) => {
+            console.log('❌ 校验失败，缺少字段:', errorInfo);
+          }}
         >
           <Form.Item
             name="library_name"
