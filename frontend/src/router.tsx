@@ -7,7 +7,6 @@ import { TaskDetailPage } from './pages/TaskDetailPage';
 import { ResultsPage } from './pages/ResultsPage';
 import { StatisticsPage } from './pages/StatisticsPage';
 import { ReportsPage } from './pages/ReportsPage';
-import { AttackTemplatesPage } from './pages/AttackTemplatesPage';
 import { JudgePage } from './pages/JudgePage';
 import { ReviewsPage } from './pages/ReviewsPage';
 import { FilesPage } from './pages/FilesPage';
@@ -22,7 +21,6 @@ export const router = createBrowserRouter([
       { path: 'statistics', element: <StatisticsPage /> },
       { path: 'models', element: <ModelsPage /> },
       { path: 'benchmarks', element: <BenchmarksPage /> },
-      { path: 'attack-templates', element: <AttackTemplatesPage /> },
       { path: 'tasks', element: <TasksPage /> },
       { path: 'tasks/:taskId', element: <TaskDetailPage /> },
       { path: 'results', element: <ResultsPage /> },

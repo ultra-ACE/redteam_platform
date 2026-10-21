@@ -12,6 +12,7 @@ import type {
   BenchmarkVersion,
   EvaluationResult,
   EvaluationTask,
+  EvaluationTaskCreatePayload,
   HealthData,
   JudgeProfile,
   JudgeReEvaluateResult,
@@ -116,7 +117,7 @@ export const listTasks = async (params?: Record<string, unknown>) => {
   return data.data;
 };
 
-export const createTask = async (payload: Record<string, unknown>) => {
+export const createTask = async (payload: EvaluationTaskCreatePayload) => {
   const { data } = await apiClient.post<ApiEnvelope<EvaluationTask>>('/evaluation-tasks', payload);
   return data.data;
 };

@@ -103,6 +103,51 @@ export type RetryFailedData = {
   status: string;
 };
 
+export type EvaluationTaskModelBinding = {
+  model_id: number;
+  role?: 'target' | 'attacker';
+  model_params?: Record<string, unknown>;
+  enabled?: boolean;
+};
+
+export type EvaluationTaskRetryConfig = {
+  max_attempts: number;
+  backoff_seconds: number;
+};
+
+export type EvaluationTaskExecutionConfig = {
+  repeat: number;
+  timeout_seconds: number;
+  retry: EvaluationTaskRetryConfig;
+  concurrency: number;
+};
+
+export type AttackStrategyType = 'static' | 'transform' | 'iterative';
+export type AttackStrategyCode = 'static' | 'base64' | 'puzzler' | 'pair';
+
+export type EvaluationTaskAttackStrategy = {
+  type: AttackStrategyType;
+  code: AttackStrategyCode;
+  config?: Record<string, unknown>;
+  enabled?: boolean;
+};
+
+export type EvaluationTaskCreatePayload = {
+  name: string;
+  benchmark_version_id?: number | null;
+  seed_test_case_ids?: number[];
+  sample_size?: number;
+  model_bindings: EvaluationTaskModelBinding[];
+  attack_template_ids?: number[];
+  judge_profile_ids: number[];
+  rule_set_ids: number[];
+  execution: EvaluationTaskExecutionConfig;
+  priority?: string;
+  attacker_model_id?: number;
+  max_rounds?: number;
+  attack_strategy?: EvaluationTaskAttackStrategy;
+};
+
 export type EvaluationTask = {
   task_id: number;
   name: string;
