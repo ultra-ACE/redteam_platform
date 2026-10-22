@@ -14,7 +14,7 @@ export type TemplateImportSummary = {
   errors: string[];
 };
 
-export const TEMPLATE_IMPORT_ACCEPT = '.json,.jsonl,.ndjson,.txt';
+export const TEMPLATE_IMPORT_ACCEPT = '.json,.jsonl,.ndjson,.csv,.txt';
 const TEMPLATE_IMPORT_LIMIT = 500;
 
 export function getErrorMessage(error: unknown): string {
@@ -56,10 +56,21 @@ function normalizeVariables(value: unknown, templateText: string): string[] {
     );
   }
   if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) {
+          return normalizeVariables(parsed, templateText);
+        }
+      } catch {
+        // Fall back to delimiter splitting.
+      }
+    }
     return Array.from(
       new Set([
-        ...value
-          .split(/[,;，；\s]+/)
+        ...trimmed
+          .split(/[,;|，；\s]+/)
           .map((item) => item.trim())
           .filter(Boolean)
           .map((item) =>
@@ -70,6 +81,106 @@ function normalizeVariables(value: unknown, templateText: string): string[] {
     );
   }
   return detected;
+}
+
+function parseCsvRows(content: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  const pushField = () => {
+    row.push(field);
+    field = '';
+  };
+  const pushRow = () => {
+    pushField();
+    if (row.some((value) => value.trim())) rows.push(row);
+    row = [];
+  };
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    if (inQuotes) {
+      if (char === '"' && content[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"' && field.length === 0) {
+      inQuotes = true;
+    } else if (char === ',') {
+      pushField();
+    } else if (char === '\n') {
+      pushRow();
+    } else if (char === '\r') {
+      if (content[index + 1] === '\n') index += 1;
+      pushRow();
+    } else {
+      field += char;
+    }
+  }
+
+  if (field.length || row.length) pushRow();
+  return rows;
+}
+
+const CSV_HEADER_ALIASES: Record<string, string> = {
+  library_name: 'library_name',
+  模板库名称: 'library_name',
+  模板库: 'library_name',
+  name: 'name',
+  模板名称: 'name',
+  template_text: 'template_text',
+  模板内容: 'template_text',
+  template: 'template_text',
+  variables: 'variables',
+  变量: 'variables',
+  变量列表: 'variables',
+  version: 'version',
+  版本: 'version',
+  status: 'status',
+  状态: 'status',
+};
+
+function parseCsvRecords(content: string): Record<string, string>[] {
+  const rows = parseCsvRows(content.replace(/^\uFEFF/, ''));
+  if (rows.length < 2) throw new Error('CSV 文件至少需要表头和一行模板');
+
+  const headers = rows[0].map((header) => {
+    const normalized = header.trim().toLowerCase();
+    return CSV_HEADER_ALIASES[normalized] ?? normalized;
+  });
+  if (!headers.includes('template_text')) {
+    throw new Error('CSV 缺少 template_text（模板内容）列');
+  }
+
+  return rows.slice(1).map((values) => {
+    const record: Record<string, string> = {};
+    headers.forEach((header, index) => {
+      if (header) record[header] = values[index] ?? '';
+    });
+    return record;
+  });
+}
+
+async function readFileText(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/^\uFEFF/, '');
+  } catch {
+    try {
+      return new TextDecoder('gbk').decode(buffer).replace(/^\uFEFF/, '');
+    } catch {
+      return new TextDecoder().decode(buffer).replace(/^\uFEFF/, '');
+    }
+  }
 }
 
 function draftFromRecord(
@@ -117,7 +228,7 @@ async function parseTemplateFile(
   file: File,
   defaultLibraryName: string,
 ): Promise<TemplateImportDraft[]> {
-  const content = await file.text();
+  const content = await readFileText(file);
   const suffix = file.name.split('.').pop()?.toLowerCase() ?? '';
   const baseName = file.name.replace(/\.[^.]+$/, '');
   let records: unknown[];
@@ -150,8 +261,10 @@ async function parseTemplateFile(
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
+  } else if (suffix === 'csv') {
+    records = parseCsvRecords(content);
   } else {
-    throw new Error('只支持 JSON、JSONL、NDJSON、TXT 文件');
+    throw new Error('只支持 JSON、JSONL、NDJSON、CSV、TXT 文件');
   }
 
   if (!records.length) throw new Error('文件中没有模板');

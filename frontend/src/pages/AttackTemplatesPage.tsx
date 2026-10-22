@@ -350,7 +350,7 @@ export function AttackTemplatesPage() {
             </p>
             <p className="ant-upload-text">点击或拖拽模板文件到这里</p>
             <p className="ant-upload-hint">
-              支持 JSON、JSONL、NDJSON、TXT。JSON 字段为 name、template_text、variables、version、status；TXT 每行一条模板。
+              支持 JSON、JSONL、NDJSON、CSV、TXT。CSV/JSON 字段为 library_name、name、template_text、variables、version、status；TXT 每行一条模板。
             </p>
           </Dragger>
           {importErrors.length ? (
