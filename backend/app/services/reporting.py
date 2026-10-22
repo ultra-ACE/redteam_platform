@@ -318,7 +318,7 @@ class ReportService(BaseService):
                   {self._html_table(
                       ["字段", "内容"],
                       [
-                          ["攻击方式", case["attack_method"] or context["attack_method_label"]],
+                          ["攻击方式", context["attack_method_label"]],
                           ["模板", f'{case["template_library"] or "-"} / {case["template_name"] or "-"}'],
                           ["迭代轮次", case["round_no"] if case["round_no"] is not None else "-"],
                           ["Judge", case["judge_profile_name"] or "-"],
