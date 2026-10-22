@@ -6,7 +6,6 @@ import {
   FileDoneOutlined,
   FileSearchOutlined,
   FileTextOutlined,
-  FolderOpenOutlined,
   FundProjectionScreenOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -52,7 +51,6 @@ const menuItems = [
     label: '报告',
     children: [
       { key: '/reports', icon: <FileTextOutlined />, label: '报告中心' },
-      { key: '/files', icon: <FolderOpenOutlined />, label: '文件台账' },
     ],
   },
 ];
@@ -66,8 +64,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/results': { title: '结果查询', subtitle: '查看逐条评测结果、Judge 判断和规则命中' },
   '/reviews': { title: '人工复核', subtitle: '处理低可信度、规则冲突和边界结果' },
   '/judge': { title: 'Judge 配置', subtitle: '配置 Judge 模型、规则策略和可信度计算' },
-  '/reports': { title: '报告中心', subtitle: '生成、查询和下载 HTML 报告' },
-  '/files': { title: '文件台账', subtitle: '查看并下载数据集原文与报告产物' },
+  '/reports': { title: '报告中心', subtitle: '生成、查询和下载报告，并查看系统文件台账' },
 };
 
 export function AppLayout() {

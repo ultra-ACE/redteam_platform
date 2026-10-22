@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { DownloadOutlined, FileTextOutlined, SearchOutlined } from '@ant-design/icons';
-import { Button, Col, InputNumber, Row, Space, Tag, message } from 'antd';
+import { Button, Col, InputNumber, Row, Space, Tabs, Tag, message } from 'antd';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { createReport, downloadReport, getReport } from '../api';
 import { PageHeader, SectionCard } from '../components/ui';
 import type { Report } from '../types/api';
 import { formatDateTime } from '../utils/format';
+import { FilesPage } from './FilesPage';
 
 export function ReportsPage() {
   const [taskId, setTaskId] = useState(1);
@@ -50,64 +51,80 @@ export function ReportsPage() {
     <div className="page-stack">
       <PageHeader
         title="报告中心"
-        description="为指定评测任务生成可直接打开和下载的 HTML 报告。"
+        description="生成、查询和下载 HTML 报告，并统一查看系统文件台账。"
       />
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={10}>
-          <SectionCard title="创建报告">
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <InputNumber min={1} value={taskId} onChange={(value) => setTaskId(Number(value ?? 1))} addonBefore="任务 ID" style={{ width: '100%' }} />
-              <Button type="primary" block icon={<FileTextOutlined />} loading={createMutation.isPending} onClick={() => createMutation.mutate()}>
-                生成报告
-              </Button>
-            </Space>
-          </SectionCard>
-        </Col>
-        <Col xs={24} xl={14}>
-          <SectionCard title="报告状态" extra={reportId ? <Tag color="blue">报告 #{reportId}</Tag> : null}>
-            <Space direction="vertical" size={16} style={{ width: '100%' }}>
-              <Space>
-                <InputNumber
-                  min={1}
-                  value={reportId ?? undefined}
-                  onChange={(value) => setReportId(value ? Number(value) : null)}
-                  addonBefore="报告 ID"
-                />
-                <Button icon={<SearchOutlined />} disabled={!reportId} onClick={() => reportQuery.refetch()}>
-                  查询
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<DownloadOutlined />}
-                  disabled={!reportQuery.data || reportQuery.data.status !== 'ready'}
-                  onClick={handleDownload}
-                >
-                  下载
-                </Button>
-              </Space>
-              {reportQuery.data ? (
-                <div className="code-block">
-                  {JSON.stringify(
-                    {
-                      report_id: reportQuery.data.report_id,
-                      task_id: reportQuery.data.task_id,
-                      status: reportQuery.data.status,
-                      format: reportQuery.data.format,
-                      file_id: reportQuery.data.file_id,
-                      created_at: formatDateTime(reportQuery.data.created_at),
-                      finished_at: formatDateTime(reportQuery.data.finished_at),
-                    },
-                    null,
-                    2,
-                  )}
-                </div>
-              ) : (
-                <div style={{ color: '#94a3b8' }}>创建或输入报告 ID 后查看状态。</div>
-              )}
-            </Space>
-          </SectionCard>
-        </Col>
-      </Row>
+      <Tabs
+        defaultActiveKey="reports"
+        items={[
+          {
+            key: 'reports',
+            label: '报告生成与查询',
+            children: (
+              <Row gutter={[16, 16]}>
+                <Col xs={24} xl={10}>
+                  <SectionCard title="创建报告">
+                    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                      <InputNumber min={1} value={taskId} onChange={(value) => setTaskId(Number(value ?? 1))} addonBefore="任务 ID" style={{ width: '100%' }} />
+                      <Button type="primary" block icon={<FileTextOutlined />} loading={createMutation.isPending} onClick={() => createMutation.mutate()}>
+                        生成报告
+                      </Button>
+                    </Space>
+                  </SectionCard>
+                </Col>
+                <Col xs={24} xl={14}>
+                  <SectionCard title="报告状态" extra={reportId ? <Tag color="blue">报告 #{reportId}</Tag> : null}>
+                    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                      <Space>
+                        <InputNumber
+                          min={1}
+                          value={reportId ?? undefined}
+                          onChange={(value) => setReportId(value ? Number(value) : null)}
+                          addonBefore="报告 ID"
+                        />
+                        <Button icon={<SearchOutlined />} disabled={!reportId} onClick={() => reportQuery.refetch()}>
+                          查询
+                        </Button>
+                        <Button
+                          type="primary"
+                          icon={<DownloadOutlined />}
+                          disabled={!reportQuery.data || reportQuery.data.status !== 'ready'}
+                          onClick={handleDownload}
+                        >
+                          下载
+                        </Button>
+                      </Space>
+                      {reportQuery.data ? (
+                        <div className="code-block">
+                          {JSON.stringify(
+                            {
+                              report_id: reportQuery.data.report_id,
+                              task_id: reportQuery.data.task_id,
+                              status: reportQuery.data.status,
+                              format: reportQuery.data.format,
+                              file_id: reportQuery.data.file_id,
+                              created_at: formatDateTime(reportQuery.data.created_at),
+                              finished_at: formatDateTime(reportQuery.data.finished_at),
+                            },
+                            null,
+                            2,
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ color: '#94a3b8' }}>创建或输入报告 ID 后查看状态。</div>
+                      )}
+                    </Space>
+                  </SectionCard>
+                </Col>
+              </Row>
+            ),
+          },
+          {
+            key: 'files',
+            label: '文件台账',
+            children: <FilesPage embedded />,
+          },
+        ]}
+      />
     </div>
   );
 }

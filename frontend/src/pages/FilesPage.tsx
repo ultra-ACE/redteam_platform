@@ -30,7 +30,7 @@ function formatBytes(value: number) {
   return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-export function FilesPage() {
+export function FilesPage({ embedded = false }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [filterOwnerType, setFilterOwnerType] = useState<string | undefined>(undefined);
@@ -128,18 +128,25 @@ export function FilesPage() {
   const total = filesQuery.data?.total ?? 0;
 
   return (
-    <div className="page-stack">
-      <PageHeader
-        title="文件台账"
-        description="系统统一记录所有落盘文件：导入的数据集原文与生成的报告产物。用户上传入口只有 Benchmark 导入一处，这里提供查询与下载。"
-        extra={
-          <Button icon={<ReloadOutlined />} onClick={() => filesQuery.refetch()}>
-            刷新
-          </Button>
-        }
-      />
+    <div className={embedded ? undefined : 'page-stack'}>
+      {!embedded ? (
+        <PageHeader
+          title="文件台账"
+          description="系统统一记录所有落盘文件：导入的数据集原文与生成的报告产物。"
+        />
+      ) : null}
 
-      <SectionCard title="文件索引" extra={<Tag color="blue">共 {total} 个文件</Tag>}>
+      <SectionCard
+        title="文件索引"
+        extra={
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={() => filesQuery.refetch()}>
+              刷新
+            </Button>
+            <Tag color="blue">共 {total} 个文件</Tag>
+          </Space>
+        }
+      >
         <Space direction="vertical" size={14} style={{ width: '100%' }}>
           <Space wrap>
             <Select

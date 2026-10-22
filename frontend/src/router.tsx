@@ -9,7 +9,6 @@ import { StatisticsPage } from './pages/StatisticsPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { JudgePage } from './pages/JudgePage';
 import { ReviewsPage } from './pages/ReviewsPage';
-import { FilesPage } from './pages/FilesPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 export const router = createBrowserRouter([
@@ -27,7 +26,7 @@ export const router = createBrowserRouter([
       { path: 'reviews', element: <ReviewsPage /> },
       { path: 'judge', element: <JudgePage /> },
       { path: 'reports', element: <ReportsPage /> },
-      { path: 'files', element: <FilesPage /> },
+      { path: 'files', element: <Navigate to="/reports" replace /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
