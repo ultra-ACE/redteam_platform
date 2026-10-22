@@ -113,8 +113,8 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
           ) : null}
 
           <Card size="small" title="实际发送给模型的 Prompt">
-            <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
-              {detail.rendered_prompt ?? detail.prompt ?? '-'}
+            <pre className="code-block">
+  {(detail as any).input_snapshot?.prompt ?? (detail as any).rendered_prompt ?? detail.prompt ?? '-'}
             </pre>
           </Card>
 
