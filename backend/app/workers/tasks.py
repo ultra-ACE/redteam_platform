@@ -21,21 +21,32 @@ def _elapsed_ms(started: float) -> int:
     return int((time.perf_counter() - started) * 1000)
 
 
-def _run_task_case(task_case_id: int, celery_task_id: str | None) -> int | None:
+def _run_task_case(
+    task_case_id: int,
+    celery_task_id: str | None,
+) -> tuple[int | None, bool]:
     """PAIR 用例必须同步执行（每轮 Judge 内部会 asyncio.run），普通用例走异步链路。"""
     try:
         with SessionLocal() as session:
             uow = UnitOfWork(session)
             service = TaskExecutionService(uow)
             if service.requires_iterative(task_case_id):
-                return service.run_iterative_task_case(task_case_id, celery_task_id=celery_task_id)
-            return asyncio.run(service.run_task_case(task_case_id, celery_task_id=celery_task_id))
+                attempt_id = service.run_iterative_task_case(
+                    task_case_id,
+                    celery_task_id=celery_task_id,
+                )
+                # PAIR 内部已经完成 Judge、规则校验和人工复核。
+                return attempt_id, False
+            attempt_id = asyncio.run(
+                service.run_task_case(task_case_id, celery_task_id=celery_task_id)
+            )
+            return attempt_id, True
     except Exception as exc:
         logger.exception("task case %s failed unexpectedly", task_case_id)
         with SessionLocal() as session:
             service = TaskExecutionService(UnitOfWork(session))
             service.fail_task_case(task_case_id, "WORKER_EXCEPTION", str(exc))
-        return None
+        return None, False
 
 
 @celery_app.task(name="workers.dispatch_task")
@@ -131,14 +142,14 @@ def execute_failed_task(task_id: int) -> list[int]:
 def run_task_case(self, task_case_id: int) -> int | None:
     started = time.perf_counter()
     celery_task_id = getattr(self.request, "id", None)
-    attempt_id = _run_task_case(task_case_id, celery_task_id)
+    attempt_id, enqueue_followup = _run_task_case(task_case_id, celery_task_id)
     logger.info(
         "task_case=%s stage=worker_total elapsed_ms=%d attempt_id=%s",
         task_case_id,
         _elapsed_ms(started),
         attempt_id,
     )
-    if attempt_id is not None:
+    if attempt_id is not None and enqueue_followup:
         judge_attempt.delay(attempt_id)
     return attempt_id
 
