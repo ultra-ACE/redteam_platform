@@ -505,7 +505,7 @@ export function BenchmarksPage() {
                   <p className="ant-upload-drag-icon"><InboxOutlined /></p>
                   <p className="ant-upload-text">点击或拖拽模板文件到此处（可多选）</p>
                   <p className="ant-upload-hint">
-                    支持 JSON、JSONL、NDJSON、TXT。JSON 字段为 library_name、name、template_text、variables、version、status；TXT 每行一条模板。
+                    支持 JSON、JSONL、NDJSON、CSV、TXT。兼容 name/template_text 与 template_name/prompt_pattern 字段；TXT 每行一条模板。
                   </p>
                 </Dragger>
               </Space>

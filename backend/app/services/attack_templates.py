@@ -212,6 +212,6 @@ class AttackTemplateService(BaseService):
     def _normalize_template_text(template_text: str) -> str:
         """兼容官方数据集里的占位符写法，统一成 {prompt}。"""
         normalized = template_text
-        for alias in ("{0}", "{seed}", "{behavior}"):
+        for alias in ("{0}", "{question}", "{seed}", "{behavior}"):
             normalized = normalized.replace(alias, "{prompt}")
         return normalized

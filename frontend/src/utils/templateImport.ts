@@ -34,7 +34,7 @@ function detectVariables(templateText: string): string[] {
   for (const match of templateText.matchAll(pattern)) {
     const name = match[1] ?? match[2];
     if (!name) continue;
-    names.add(['seed', 'behavior'].includes(name) ? 'prompt' : name);
+    names.add(['question', 'seed', 'behavior'].includes(name) ? 'prompt' : name);
   }
   if (/\{\s*0\s*\}/.test(templateText)) names.add('prompt');
   return Array.from(names);
@@ -49,7 +49,7 @@ function normalizeVariables(value: unknown, templateText: string): string[] {
           .map((item) => String(item).trim())
           .filter(Boolean)
           .map((item) =>
-            ['0', 'seed', 'behavior'].includes(item) ? 'prompt' : item,
+            ['0', 'question', 'seed', 'behavior'].includes(item) ? 'prompt' : item,
           ),
         ...detected,
       ]),
@@ -74,7 +74,7 @@ function normalizeVariables(value: unknown, templateText: string): string[] {
           .map((item) => item.trim())
           .filter(Boolean)
           .map((item) =>
-            ['0', 'seed', 'behavior'].includes(item) ? 'prompt' : item,
+            ['0', 'question', 'seed', 'behavior'].includes(item) ? 'prompt' : item,
           ),
         ...detected,
       ]),
@@ -136,8 +136,10 @@ const CSV_HEADER_ALIASES: Record<string, string> = {
   模板库名称: 'library_name',
   模板库: 'library_name',
   name: 'name',
+  template_name: 'name',
   模板名称: 'name',
   template_text: 'template_text',
+  prompt_pattern: 'template_text',
   模板内容: 'template_text',
   template: 'template_text',
   variables: 'variables',
