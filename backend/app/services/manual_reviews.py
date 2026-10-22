@@ -192,6 +192,11 @@ class ManualReviewService(BaseService):
         attempt = self.uow.task_attempts.get(review.task_attempt_id)
         task_case = self.uow.task_cases.get(attempt.task_case_id) if attempt else None
         test_case = self.uow.test_cases.get(task_case.test_case_id) if task_case else None
+        rendered_prompt = (
+            str((attempt.input_snapshot or {}).get("prompt"))
+            if attempt is not None and (attempt.input_snapshot or {}).get("prompt")
+            else (test_case.prompt if test_case else None)
+        )
 
         judge_result = None
         rules: list[RuleValidationResult] = []
@@ -226,7 +231,7 @@ class ManualReviewService(BaseService):
             task_id=task_case.task_id if task_case else None,
             test_case_id=test_case.id if test_case else None,
             external_id=test_case.external_id if test_case else None,
-            prompt=test_case.prompt if test_case else None,
+            prompt=rendered_prompt,
             model_output=attempt.output_text if attempt else None,
             judge_verdict=judge_result.verdict if judge_result else None,
             judge_confidence=judge_result.confidence if judge_result else None,

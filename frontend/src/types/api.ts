@@ -354,6 +354,7 @@ export type AttemptDetail = {
   status: string;
   prompt?: string | null;
   system_prompt?: string | null;
+  rendered_prompt?: string | null;
   input_snapshot?: Record<string, unknown> | null;
   model_output?: string | null;
   latency_ms?: number | null;

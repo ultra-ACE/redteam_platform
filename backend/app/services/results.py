@@ -86,6 +86,7 @@ class EvaluationResultService(BaseService):
                 trust_score=judge_result.trust_score or 0.0,
             )
 
+        rendered_prompt = self._rendered_prompt(attempt, test_case)
         return EvaluationResult(
             attempt_id=attempt.id,
             task_case_id=task_case.id,
@@ -96,7 +97,7 @@ class EvaluationResultService(BaseService):
             dataset_type=test_case.dataset_type,
             sample_kind=test_case.sample_kind,
             status=attempt.status,
-            prompt_excerpt=(test_case.prompt or "")[:200],
+            prompt_excerpt=rendered_prompt[:200],
             model_output_excerpt=(attempt.output_text or "")[:500],
             judge=judge_summary,
             rule_validation=RuleValidationSummary(
@@ -135,7 +136,12 @@ class EvaluationResultService(BaseService):
             attempt_no=attempt.attempt_no,
             status=attempt.status,
             prompt=test_case.prompt if test_case else None,
-            system_prompt=test_case.system_prompt if test_case else None,
+            system_prompt=(
+                str((attempt.input_snapshot or {}).get("system_prompt"))
+                if (attempt.input_snapshot or {}).get("system_prompt")
+                else (test_case.system_prompt if test_case else None)
+            ),
+            rendered_prompt=self._rendered_prompt(attempt, test_case),
             input_snapshot=attempt.input_snapshot,
             model_output=attempt.output_text,
             latency_ms=attempt.latency_ms,
@@ -151,6 +157,13 @@ class EvaluationResultService(BaseService):
             if self._latest_manual_review(attempt.id)
             else None,
         )
+
+    @staticmethod
+    def _rendered_prompt(attempt: TaskAttempt, test_case: TestCase | None) -> str:
+        snapshot_prompt = (attempt.input_snapshot or {}).get("prompt")
+        if snapshot_prompt:
+            return str(snapshot_prompt)
+        return test_case.prompt if test_case and test_case.prompt else ""
 
     def _build_judge_detail(self, judge_result: JudgeResult | None) -> JudgeDetail | None:
         if judge_result is None:

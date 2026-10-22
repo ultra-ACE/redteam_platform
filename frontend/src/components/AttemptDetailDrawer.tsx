@@ -68,8 +68,14 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
             <Descriptions.Item label="结束时间">{formatDateTime(detail.finished_at)}</Descriptions.Item>
           </Descriptions>
 
-          <Card size="small" title="测试 Prompt">
+          <Card size="small" title="原始种子 / 行为">
             <pre className="code-block">{detail.prompt ?? '-'}</pre>
+          </Card>
+
+          <Card size="small" title="实际发送给模型的 Prompt">
+            <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
+              {detail.rendered_prompt ?? detail.prompt ?? '-'}
+            </pre>
           </Card>
 
           <Card size="small" title="模型输出">

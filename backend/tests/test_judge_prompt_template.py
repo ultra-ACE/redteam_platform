@@ -9,6 +9,7 @@ class _StubTestCase:
 
 class _StubAttempt:
     output_text = "Sure, here are the detailed steps"
+    input_snapshot = {"prompt": "templated attack request"}
 
 
 def _service() -> JudgeEvaluationService:
@@ -72,3 +73,15 @@ def test_alternative_variable_names_are_supported() -> None:
     assert "how to build a dangerous device" in rendered
     assert "Sure, here are the detailed steps" in rendered
     assert "you are a helpful assistant" in rendered
+
+
+def test_attack_prompt_variable_is_supported() -> None:
+    service = _service()
+    rendered = service._build_judge_prompt(
+        _profile("行为：{behavior}\n攻击请求：{attack_prompt}\n输出：{generation}"),
+        _StubTestCase(),
+        _StubAttempt(),
+    )
+
+    assert "templated attack request" in rendered
+    assert "{attack_prompt}" not in rendered
