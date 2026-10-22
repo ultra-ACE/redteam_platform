@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  CheckSquareOutlined,
+  ClearOutlined,
   EyeOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
@@ -25,6 +27,7 @@ import {
   Space,
   Switch,
   Table,
+  Tag,
   message,
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,7 +35,6 @@ import {
   cancelTask,
   createTask,
   listAttackTemplates,
-  listBenchmarkVersions,
   listBenchmarks,
   listJudgeProfiles,
   listModels,
@@ -62,53 +64,51 @@ const STRATEGY_CODES: Record<string, Array<{ value: string; label: string }>> = 
   iterative: [{ value: 'pair', label: 'pair · PAIR 迭代' }],
 };
 
-const DATASET_TYPE_OPTIONS = [
-  { value: 'harmful', label: 'harmful · 有害' },
-  { value: 'benign', label: 'benign · 良性' },
-  { value: 'jailbreak', label: 'jailbreak · 越狱' },
-];
-
 export function TasksPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
-  const benchmarkId = Form.useWatch('benchmark_id', form);
-  const benchmarkVersionId = Form.useWatch('benchmark_version_id', form);
-  const seedDatasetType = Form.useWatch('seed_dataset_type', form);
+  const seedBenchmarkId = Form.useWatch('seed_benchmark_id', form);
+  const selectedSeedIds = Form.useWatch('seed_test_case_ids', form) as number[] | undefined;
   const strategyType = Form.useWatch('strategy_type', form);
   const strategyCode = Form.useWatch('strategy_code', form);
   const [seedSearchInput, setSeedSearchInput] = useState('');
   const [seedKeyword, setSeedKeyword] = useState('');
   const [seedOptions, setSeedOptions] = useState<TestCase[]>([]);
+  const [seedBatchLoading, setSeedBatchLoading] = useState(false);
 
-  // 远程搜索防抖：输入停顿 300ms 后才发起请求，避免每敲一个字都打后端。
   useEffect(() => {
     const timer = window.setTimeout(() => setSeedKeyword(seedSearchInput.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [seedSearchInput]);
 
-  // 切换 Benchmark 版本时，已选种子不再属于当前版本，清空选择。
+  const benchmarksQuery = useQuery({
+    queryKey: ['benchmarks', 'tasks'],
+    queryFn: () => listBenchmarks({ page_size: 200 }),
+  });
   useEffect(() => {
     form.setFieldValue('seed_test_case_ids', []);
     setSeedOptions([]);
-  }, [benchmarkVersionId, form]);
+    setSeedSearchInput('');
+    setSeedKeyword('');
+  }, [seedBenchmarkId, form]);
 
   const seedQuery = useQuery({
-    queryKey: ['seed-test-cases', benchmarkVersionId, seedKeyword, seedDatasetType],
+    queryKey: ['seed-test-cases', seedBenchmarkId, seedKeyword],
     queryFn: () =>
       listTestCases({
-        benchmark_version_id: benchmarkVersionId,
+        benchmark_id: seedBenchmarkId,
         keyword: seedKeyword || undefined,
-        dataset_type: seedDatasetType || undefined,
         status: 'active',
         page: 1,
         page_size: 50,
       }),
-    enabled: open && Boolean(benchmarkVersionId),
+    enabled: open && Boolean(seedBenchmarkId),
   });
 
   useEffect(() => {
+    if (!open) return;
     const items = seedQuery.data?.items ?? [];
     if (!items.length) return;
     setSeedOptions((current) => {
@@ -116,24 +116,56 @@ export function TasksPage() {
       items.forEach((item) => byId.set(item.test_case_id, item));
       return Array.from(byId.values());
     });
-  }, [seedQuery.data]);
+  }, [open, seedQuery.data]);
 
   const seedSelectOptions = useMemo(
     () =>
       seedOptions.map((item) => ({
         value: item.test_case_id,
-        label: `${item.external_id} · ${(item.prompt || '').slice(0, 40)}${(item.prompt || '').length > 40 ? '…' : ''}`,
+        label: `${item.external_id} · ${(item.prompt || '').slice(0, 40)}${
+          (item.prompt || '').length > 40 ? '…' : ''
+        } · ${item.dataset_type}`,
       })),
     [seedOptions],
   );
 
+  const selectAllSeeds = async () => {
+    if (!seedBenchmarkId) {
+      message.warning('请先选择种子库');
+      return;
+    }
+    setSeedBatchLoading(true);
+    try {
+      const items: TestCase[] = [];
+      let page = 1;
+      for (let guard = 0; guard < 100; guard += 1) {
+        const result = await listTestCases({
+          benchmark_id: seedBenchmarkId,
+          status: 'active',
+          page,
+          page_size: 200,
+        });
+        items.push(...result.items);
+        if (!result.has_next || !result.items.length) break;
+        page += 1;
+      }
+      setSeedOptions(items);
+      form.setFieldValue(
+        'seed_test_case_ids',
+        items.map((item) => item.test_case_id),
+      );
+      message.success(`已选择当前种子库的 ${items.length} 条种子`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '批量选择失败');
+    } finally {
+      setSeedBatchLoading(false);
+    }
+  };
+
   const tasksQuery = useQuery({ queryKey: ['tasks'], queryFn: () => listTasks({ page_size: 200 }) });
-  const modelsQuery = useQuery({ queryKey: ['models', 'tasks'], queryFn: () => listModels({ page_size: 200 }) });
-  const benchmarksQuery = useQuery({ queryKey: ['benchmarks', 'tasks'], queryFn: () => listBenchmarks({ page_size: 200 }) });
-  const versionsQuery = useQuery({
-    queryKey: ['benchmark-versions', benchmarkId],
-    queryFn: () => listBenchmarkVersions(benchmarkId),
-    enabled: Boolean(benchmarkId),
+  const modelsQuery = useQuery({
+    queryKey: ['models', 'tasks'],
+    queryFn: () => listModels({ page_size: 200 }),
   });
   const templatesQuery = useQuery({
     queryKey: ['attack-templates', 'tasks'],
@@ -209,7 +241,7 @@ export function TasksPage() {
     <div className="page-stack">
       <PageHeader
         title="评测任务"
-        description="选择 Benchmark、被测模型、Judge 和规则集，创建越狱安全评测任务，并支持暂停/继续/断点续跑。"
+        description="选择种子问题、模板、被测模型与 Judge，创建越狱安全评测任务，并支持暂停、继续和断点续跑。"
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => tasksQuery.refetch()}>
@@ -230,7 +262,12 @@ export function TasksPage() {
         columns={[
           { title: 'ID', dataIndex: 'task_id', width: 80 },
           { title: '任务名称', dataIndex: 'name' },
-          { title: '状态', dataIndex: 'status', width: 130, render: (value) => <TaskStatusTag status={value} /> },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            width: 130,
+            render: (value) => <TaskStatusTag status={value} />,
+          },
           {
             title: '进度',
             dataIndex: 'progress',
@@ -238,14 +275,22 @@ export function TasksPage() {
             render: (value) => <Progress percent={Math.round((value ?? 0) * 100)} size="small" />,
           },
           { title: '用例数', dataIndex: 'total_cases', width: 100 },
-          { title: '完成 / 失败', width: 120, render: (_, record) => `${record.completed_cases} / ${record.failed_cases}` },
+          {
+            title: '完成 / 失败',
+            width: 120,
+            render: (_, record) => `${record.completed_cases} / ${record.failed_cases}`,
+          },
           { title: '创建时间', dataIndex: 'created_at', render: formatDateTime },
           {
             title: '操作',
             width: 340,
             render: (_, record) => (
               <Space wrap>
-                <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/tasks/${record.task_id}`)}>
+                <Button
+                  type="link"
+                  icon={<EyeOutlined />}
+                  onClick={() => navigate(`/tasks/${record.task_id}`)}
+                >
                   详情
                 </Button>
                 {record.status === 'draft' ? (
@@ -297,7 +342,12 @@ export function TasksPage() {
                     cancelText="再想想"
                     okButtonProps={{ danger: true }}
                   >
-                    <Button type="link" danger icon={<StopOutlined />} loading={cancelMutation.isPending}>
+                    <Button
+                      type="link"
+                      danger
+                      icon={<StopOutlined />}
+                      loading={cancelMutation.isPending}
+                    >
                       取消
                     </Button>
                   </Popconfirm>
@@ -311,9 +361,14 @@ export function TasksPage() {
       <Modal
         title="创建评测任务"
         open={open}
-        width={720}
+        width={760}
         onCancel={() => setOpen(false)}
         onOk={() => form.submit()}
+        afterClose={() => {
+          setSeedSearchInput('');
+          setSeedKeyword('');
+          setSeedOptions([]);
+        }}
         confirmLoading={createMutation.isPending}
         destroyOnClose
       >
@@ -325,6 +380,7 @@ export function TasksPage() {
             repeat: 1,
             timeout_seconds: 120,
             concurrency: 4,
+            seed_benchmark_id: undefined,
             seed_test_case_ids: [],
             sample_size: 50,
             seed_dataset_type: undefined,
@@ -345,7 +401,9 @@ export function TasksPage() {
             }
             createMutation.mutate({
               name: values.name,
-              benchmark_version_id: values.benchmark_version_id,
+              benchmark_id: values.seed_benchmark_id,
+              seed_test_case_ids: values.seed_test_case_ids ?? [],
+              sample_size: values.sample_size ?? 50,
               model_bindings: (values.model_ids ?? []).map((modelId: number) => ({
                 model_id: modelId,
                 role: 'target',
@@ -363,9 +421,6 @@ export function TasksPage() {
                 retry: { max_attempts: 1, backoff_seconds: 3 },
                 concurrency: values.concurrency,
               },
-              // 成员 3 扩展配置：由后端 create 路由合并进 task.config
-              seed_test_case_ids: values.seed_test_case_ids ?? [],
-              sample_size: values.sample_size ?? 50,
               max_rounds: values.max_rounds ?? 3,
               attacker_model_id:
                 values.strategy_type === 'iterative' ? values.attacker_model_id : undefined,
@@ -381,66 +436,86 @@ export function TasksPage() {
           <Form.Item name="name" label="任务名称" rules={[{ required: true }]}>
             <Input placeholder="例如：Qwen2.5-7B 越狱基线评测" />
           </Form.Item>
-          <Form.Item name="benchmark_id" label="Benchmark" rules={[{ required: true }]}>
-            <Select
-              placeholder="选择 Benchmark"
-              options={(benchmarksQuery.data?.items ?? []).map((item) => ({
-                value: item.benchmark_id,
-                label: `${item.name}（${item.slug}）`,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="benchmark_version_id" label="Benchmark 版本" rules={[{ required: true }]}>
-            <Select
-              placeholder="选择版本"
-              loading={versionsQuery.isLoading}
-              options={(versionsQuery.data?.items ?? []).map((item) => ({
-                value: item.benchmark_version_id,
-                label: `${item.version} · ${item.case_count} 条用例`,
-              }))}
-            />
-          </Form.Item>
 
           <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item name="seed_dataset_type" label="种子类型筛选">
+            <Col span={12}>
+              <Form.Item
+                name="seed_benchmark_id"
+                label="种子库"
+                rules={[{ required: true, message: '请选择种子库' }]}
+              >
                 <Select
-                  allowClear
-                  placeholder="全部类型"
-                  options={DATASET_TYPE_OPTIONS}
-                  disabled={!benchmarkVersionId}
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="选择种子库"
+                  loading={benchmarksQuery.isLoading}
+                  options={(benchmarksQuery.data?.items ?? []).map((item) => ({
+                    value: item.benchmark_id,
+                    label: `${item.name}（${item.slug}）`,
+                  }))}
                 />
               </Form.Item>
             </Col>
-            <Col span={16}>
+            <Col span={12}>
               <Form.Item
-                name="seed_test_case_ids"
-                label="种子用例（远程搜索）"
-                extra="输入外部编号或 Prompt 搜索，最多返回 50 条；不选则按下面采样条数自动抽取"
+                name="sample_size"
+                label="自动采样条数"
+                extra="未手动选择种子时生效"
               >
-                <Select
-                  mode="multiple"
-                  allowClear
-                  showSearch
-                  filterOption={false}
-                  placeholder={benchmarkVersionId ? '输入关键词搜索种子' : '请先选择 Benchmark 版本'}
-                  disabled={!benchmarkVersionId}
-                  loading={seedQuery.isFetching}
-                  onSearch={setSeedSearchInput}
-                  options={seedSelectOptions}
-                  notFoundContent={
-                    seedQuery.isFetching ? '搜索中…' : seedKeyword ? '没有匹配的种子' : '输入关键词开始搜索'
-                  }
-                />
+                <InputNumber min={1} max={100000} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>
+
           <Form.Item
-            name="sample_size"
-            label="自动采样条数"
-            extra="未手动选择种子时生效；默认 50 条，避免一次展开上千条"
+            name="seed_test_case_ids"
+            label={
+              <Space>
+                种子问题
+                {selectedSeedIds?.length ? (
+                  <Tag color="blue">已选 {selectedSeedIds.length} 条</Tag>
+                ) : null}
+              </Space>
+            }
+            extra="选择种子库后可搜索；点击“全选当前库”批量选择。未选择种子时按采样条数自动抽取"
           >
-            <InputNumber min={1} max={100000} style={{ width: 180 }} />
+            <Space.Compact style={{ width: '100%' }}>
+              <Select
+                mode="multiple"
+                allowClear
+                showSearch
+                maxTagCount="responsive"
+                filterOption={false}
+                style={{ flex: 1 }}
+                placeholder={seedBenchmarkId ? '搜索或选择种子问题' : '请先选择种子库'}
+                disabled={!seedBenchmarkId}
+                loading={seedQuery.isFetching}
+                onSearch={setSeedSearchInput}
+                options={seedSelectOptions}
+                notFoundContent={
+                  seedQuery.isFetching
+                    ? '搜索中…'
+                    : seedKeyword
+                      ? '没有匹配的种子'
+                      : '输入关键词开始搜索'
+                }
+              />
+              <Button
+                icon={<CheckSquareOutlined />}
+                loading={seedBatchLoading}
+                disabled={!seedBenchmarkId}
+                onClick={selectAllSeeds}
+              >
+                全选当前库
+              </Button>
+              <Button
+                icon={<ClearOutlined />}
+                disabled={!selectedSeedIds?.length}
+                onClick={() => form.setFieldValue('seed_test_case_ids', [])}
+              >
+                清空
+              </Button>
+            </Space.Compact>
           </Form.Item>
 
           <Form.Item
@@ -453,29 +528,33 @@ export function TasksPage() {
               placeholder="选择一个或多个模型进行对比"
               options={(modelsQuery.data?.items ?? [])
                 .filter((item) => item.usage_scope === 'target' || item.usage_scope === 'both')
-                .map((item) => ({ value: item.model_id, label: `${item.name} · ${item.adapter_type}` }))}
+                .map((item) => ({
+                  value: item.model_id,
+                  label: `${item.name} · ${item.adapter_type}`,
+                }))}
             />
           </Form.Item>
+
           <Form.Item
             name="attack_template_ids"
-            label="攻击模板"
-            extra="不选则使用原始 Prompt 直接请求（相当于 direct_request 基线）"
+            label="模板"
+            extra="模板是官方越狱 Prompt；不选则直接使用种子原文请求"
           >
             <Select
               mode="multiple"
               allowClear
-              placeholder="选择一个或多个攻击模板"
+              placeholder="选择一个或多个模板"
               loading={templatesQuery.isLoading}
               options={(templatesQuery.data?.items ?? []).map((item) => ({
                 value: item.attack_template_id,
-                label: `${item.name} · ${item.version}`,
+                label: `${item.library_name} / ${item.name} · ${item.version}`,
               }))}
             />
           </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="strategy_type" label="攻击策略">
+              <Form.Item name="strategy_type" label="攻击方式">
                 <Select
                   options={STRATEGY_TYPES}
                   onChange={(value) => {
@@ -487,11 +566,14 @@ export function TasksPage() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="strategy_code" label="策略实现">
-                <Select options={STRATEGY_CODES[strategyType ?? 'static'] ?? STRATEGY_CODES.static} />
+              <Form.Item name="strategy_code" label="具体方式">
+                <Select
+                  options={STRATEGY_CODES[strategyType ?? 'static'] ?? STRATEGY_CODES.static}
+                />
               </Form.Item>
             </Col>
           </Row>
+
           {strategyCode === 'puzzler' ? (
             <Form.Item name="strategy_style" label="Puzzler 风格">
               <Select
@@ -503,6 +585,7 @@ export function TasksPage() {
               />
             </Form.Item>
           ) : null}
+
           <Form.Item
             name="strategy_enabled"
             label="启用策略变换"
@@ -511,6 +594,7 @@ export function TasksPage() {
           >
             <Switch checkedChildren="启用" unCheckedChildren="停用" />
           </Form.Item>
+
           {strategyType === 'iterative' ? (
             <>
               <Alert
@@ -532,7 +616,9 @@ export function TasksPage() {
                       optionFilterProp="label"
                       placeholder="选择 OpenAI-compatible 或 Ollama 模型"
                       options={(modelsQuery.data?.items ?? [])
-                        .filter((item) => ['openai_compatible', 'ollama'].includes(item.adapter_type))
+                        .filter((item) =>
+                          ['openai_compatible', 'ollama'].includes(item.adapter_type),
+                        )
                         .map((item) => ({
                           value: item.model_id,
                           label: `${item.name} · ${item.adapter_type}`,
@@ -557,7 +643,7 @@ export function TasksPage() {
             <Select
               mode="multiple"
               allowClear
-              placeholder="选择一个或多个 Judge（建议同时选规则 Judge 和模型 Judge）"
+              placeholder="选择一个或多个 Judge"
               loading={judgesQuery.isLoading}
               options={(judgesQuery.data?.items ?? []).map((item) => ({
                 value: item.judge_profile_id,
@@ -565,6 +651,7 @@ export function TasksPage() {
               }))}
             />
           </Form.Item>
+
           <Space size={16} style={{ display: 'flex' }}>
             <Form.Item name="repeat" label="重复次数" style={{ flex: 1 }}>
               <InputNumber min={1} style={{ width: '100%' }} />

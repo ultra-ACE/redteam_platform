@@ -8,7 +8,7 @@ from app.services.uow import UnitOfWork
 
 
 def test_domain_table_count() -> None:
-    assert len(Base.metadata.tables) == 17
+    assert len(Base.metadata.tables) == 16
 
 
 def test_unit_of_work_can_create_and_read_model() -> None:

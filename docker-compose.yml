@@ -44,6 +44,8 @@ services:
       DATA_DIR: /app/data
       CELERY_TASK_ALWAYS_EAGER: "false"
       TZ: Asia/Shanghai
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://127.0.0.1:5173}
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,6 +63,8 @@ services:
       DATA_DIR: /app/data
       CELERY_TASK_ALWAYS_EAGER: "false"
       TZ: Asia/Shanghai
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://127.0.0.1:5173}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -96,6 +100,8 @@ services:
       DATA_DIR: /app/data
       CELERY_TASK_ALWAYS_EAGER: "false"
       TZ: Asia/Shanghai
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://127.0.0.1:5173}
     volumes:
       - appdata:/app/data
     depends_on:

@@ -9,9 +9,9 @@ import type {
   Benchmark,
   BenchmarkAdapter,
   BenchmarkImportResult,
-  BenchmarkVersion,
   EvaluationResult,
   EvaluationTask,
+  EvaluationTaskCreatePayload,
   HealthData,
   JudgeProfile,
   JudgeReEvaluateResult,
@@ -80,7 +80,6 @@ export const listBenchmarkAdapters = async () => {
 };
 
 export type DeleteSummary = {
-  deleted_versions: number;
   deleted_test_cases: number;
 };
 
@@ -89,20 +88,8 @@ export const deleteBenchmark = async (benchmarkId: number) => {
   return data.data;
 };
 
-export const deleteBenchmarkVersion = async (versionId: number) => {
-  const { data } = await apiClient.delete<ApiEnvelope<DeleteSummary>>(`/benchmark-versions/${versionId}`);
-  return data.data;
-};
-
 export const listBenchmarks = async (params?: Record<string, unknown>) => {
   const { data } = await apiClient.get<ApiEnvelope<PaginatedData<Benchmark>>>('/benchmarks', { params });
-  return data.data;
-};
-
-export const listBenchmarkVersions = async (benchmarkId: number) => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<BenchmarkVersion>>>(
-    `/benchmarks/${benchmarkId}/versions`,
-  );
   return data.data;
 };
 
@@ -116,7 +103,7 @@ export const listTasks = async (params?: Record<string, unknown>) => {
   return data.data;
 };
 
-export const createTask = async (payload: Record<string, unknown>) => {
+export const createTask = async (payload: EvaluationTaskCreatePayload) => {
   const { data } = await apiClient.post<ApiEnvelope<EvaluationTask>>('/evaluation-tasks', payload);
   return data.data;
 };
@@ -310,6 +297,15 @@ export const reEvaluateJudgeResult = async (judgeResultId: number) => {
 
 export const listManualReviews = async (params?: Record<string, unknown>) => {
   const { data } = await apiClient.get<ApiEnvelope<PaginatedData<ManualReview>>>('/manual-reviews', { params });
+  return data.data;
+};
+
+export const backfillManualReviews = async (taskId?: number) => {
+  const { data } = await apiClient.post<ApiEnvelope<{ scanned: number; created: number }>>(
+    '/manual-reviews/backfill',
+    undefined,
+    { params: { task_id: taskId } },
+  );
   return data.data;
 };
 

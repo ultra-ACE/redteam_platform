@@ -168,7 +168,6 @@ async def list_evaluation_tasks(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=200),
     status: str | None = None,
-    benchmark_version_id: int | None = None,
     _: None = Depends(require_local_token),
     uow: UnitOfWork = Depends(get_uow),
 ) -> dict:

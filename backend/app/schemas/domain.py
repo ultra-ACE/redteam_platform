@@ -35,22 +35,12 @@ class Benchmark(ORMSchema):
     slug: str
     source_type: str
     description: str | None = None
-    status: str = "active"
-    created_at: datetime | None = None
-
-
-class BenchmarkVersion(ORMSchema):
-    benchmark_version_id: int = Field(
-        validation_alias=AliasChoices("benchmark_version_id", "id"),
-        serialization_alias="benchmark_version_id",
-    )
-    benchmark_id: int
-    version: str
     source_file_id: int | None = None
     case_count: int = 0
     checksum: str | None = None
-    status: str = "ready"
     imported_at: datetime | None = None
+    status: str = "active"
+    created_at: datetime | None = None
 
 
 class BenchmarkImportError(ORMSchema):
@@ -60,8 +50,8 @@ class BenchmarkImportError(ORMSchema):
 
 class BenchmarkImportResult(ORMSchema):
     benchmark_id: int
-    benchmark_version_id: int
     imported_count: int
+    skipped_count: int = 0
     failed_count: int
     errors: list[BenchmarkImportError] = Field(default_factory=list)
     detected_adapter: str | None = None
@@ -73,7 +63,7 @@ class BenchmarkImportResult(ORMSchema):
 
 class TestCase(ORMSchema):
     test_case_id: int = Field(validation_alias=AliasChoices("test_case_id", "id"), serialization_alias="test_case_id")
-    benchmark_version_id: int
+    benchmark_id: int
     external_id: str
     prompt: str
     system_prompt: str | None = None
@@ -163,6 +153,7 @@ class AttackTemplate(ORMSchema):
         validation_alias=AliasChoices("attack_template_id", "id"),
         serialization_alias="attack_template_id",
     )
+    library_name: str = "默认模板库"
     method_code: AttackMethodCode
     name: str
     template_text: str
@@ -208,7 +199,7 @@ class RuleValidationSummary(ORMSchema):
 class EvaluationTask(ORMSchema):
     task_id: int = Field(validation_alias=AliasChoices("task_id", "id"), serialization_alias="task_id")
     name: str
-    benchmark_version_id: int | None = None
+    benchmark_id: int | None = None
     status: TaskStatus
     progress: float = Field(default=0, ge=0, le=1)
     total_cases: int = 0

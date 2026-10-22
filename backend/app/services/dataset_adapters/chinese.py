@@ -15,6 +15,7 @@ from app.services.dataset_adapters.base import (
     CanonicalCase,
     DatasetAdapter,
     RowIndex,
+    content_external_id,
     normalize_key,
     split_labels,
 )
@@ -80,6 +81,7 @@ class ChineseGenericAdapter(DatasetAdapter):
         # CanonicalCase.__post_init__ 会再做一次规范化兜底。
         dataset_type = view.get(*DATASET_TYPE_FIELDS) or "harmful"
         sample_kind = view.get(*SAMPLE_KIND_FIELDS)
+        system_prompt = str(view.get(*SYSTEM_FIELDS)) if view.get(*SYSTEM_FIELDS) else None
 
         consumed = (
             PROMPT_FIELDS + ID_FIELDS + LABEL_FIELDS + CODE_FIELDS
@@ -88,9 +90,12 @@ class ChineseGenericAdapter(DatasetAdapter):
         )
 
         return CanonicalCase(
-            external_id=str(view.get(*ID_FIELDS) or f"case-{row_number}"),
+            external_id=str(
+                view.get(*ID_FIELDS)
+                or content_external_id(prompt, system_prompt)
+            ),
             prompt=str(prompt),
-            system_prompt=str(view.get(*SYSTEM_FIELDS)) if view.get(*SYSTEM_FIELDS) else None,
+            system_prompt=system_prompt,
             language=str(view.get(*LANGUAGE_FIELDS) or "zh"),
             dataset_type=str(dataset_type),
             sample_kind=str(sample_kind) if sample_kind is not None else None,

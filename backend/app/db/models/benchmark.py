@@ -17,38 +17,24 @@ class Benchmark(BaseModel):
     slug: Mapped[str] = mapped_column(String(128), nullable=False)
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
-
-
-class BenchmarkVersion(BaseModel):
-    __tablename__ = "benchmark_versions"
-    __table_args__ = (
-        UniqueConstraint("benchmark_id", "version", name="uq_benchmark_versions_benchmark_version"),
-        Index("ix_benchmark_versions_checksum", "checksum"),
-    )
-
-    benchmark_id: Mapped[int] = mapped_column(PKType, ForeignKey("benchmarks.id"), nullable=False)
-    version: Mapped[str] = mapped_column(String(64), nullable=False)
     source_file_id: Mapped[int | None] = mapped_column(PKType, ForeignKey("files.id"))
     raw_schema: Mapped[dict | None] = mapped_column(JSONType)
     case_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     checksum: Mapped[str | None] = mapped_column(String(128))
     imported_at: Mapped[datetime | None] = mapped_column()
-    status: Mapped[str] = mapped_column(String(32), default="importing", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
 
 
 class TestCase(BaseModel):
     __test__ = False
     __tablename__ = "test_cases"
     __table_args__ = (
-        UniqueConstraint("benchmark_version_id", "external_id", name="uq_test_cases_version_external"),
+        UniqueConstraint("benchmark_id", "external_id", name="uq_test_cases_benchmark_external"),
         Index("ix_test_cases_content_hash", "content_hash"),
         Index("ix_test_cases_language", "language"),
     )
 
-    benchmark_version_id: Mapped[int] = mapped_column(
-        PKType, ForeignKey("benchmark_versions.id"), nullable=False
-    )
+    benchmark_id: Mapped[int] = mapped_column(PKType, ForeignKey("benchmarks.id"), nullable=False)
     external_id: Mapped[str] = mapped_column(String(128), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     system_prompt: Mapped[str | None] = mapped_column(Text)

@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Table, Tabs, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createManualReview, getManualReview, listManualReviews } from '../api';
+import { backfillManualReviews, createManualReview, getManualReview, listManualReviews } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { ManualReview, ManualReviewDetail } from '../types/api';
 import { formatDateTime, formatPercent, shortenId } from '../utils/format';
@@ -14,7 +14,19 @@ export function ReviewsPage() {
   const [keyword, setKeyword] = useState('');
   const [form] = Form.useForm();
 
-  const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 200 }) });
+  const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 2000 }) });
+  const pendingSummaryQuery = useQuery({
+    queryKey: ['manual-reviews', 'pending-summary'],
+    queryFn: () => listManualReviews({ page: 1, page_size: 1, status: 'pending' }),
+  });
+  const backfillMutation = useMutation({
+    mutationFn: () => backfillManualReviews(),
+    onSuccess: (result) => {
+      message.success(`已扫描 ${result.scanned} 个尝试，补建 ${result.created} 条复核记录`);
+      queryClient.invalidateQueries({ queryKey: ['manual-reviews'] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
   const detailMutation = useMutation({
     mutationFn: getManualReview,
     onSuccess: (data) => {
@@ -63,6 +75,7 @@ export function ReviewsPage() {
     : reviews;
   const pendingReviews = matchedReviews.filter((item) => item.status === 'pending' || item.status === 'in_review');
   const historyReviews = matchedReviews.filter((item) => item.status === 'resolved' || item.status === 'rejected');
+  const pendingTotal = pendingSummaryQuery.data?.total ?? pendingReviews.length;
   const renderTable = (data: ManualReview[], showDecision = false) => (
     <Table<ManualReview>
       rowKey="review_id"
@@ -113,6 +126,13 @@ export function ReviewsPage() {
             <Button icon={<ReloadOutlined />} onClick={() => reviewsQuery.refetch()}>
               刷新
             </Button>
+            <Button
+              icon={<ToolOutlined />}
+              loading={backfillMutation.isPending}
+              onClick={() => backfillMutation.mutate()}
+            >
+              补建历史复核
+            </Button>
           </Space>
         }
       />
@@ -121,7 +141,7 @@ export function ReviewsPage() {
         items={[
           {
             key: 'queue',
-            label: `待复核队列（${pendingReviews.length}）`,
+            label: `待复核队列（${pendingTotal}）`,
             children: pendingReviews.length ? renderTable(pendingReviews) : <EmptyPanel title="暂无待复核结果" description="当 Judge 可信度不足或规则冲突时，系统会自动创建复核记录。" />,
           },
           {

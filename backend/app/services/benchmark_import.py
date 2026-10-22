@@ -6,9 +6,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
-from app.db.models import Benchmark, BenchmarkVersion, TestCase
+from app.db.models import Benchmark, TestCase
 from app.schemas import BenchmarkImportError, BenchmarkImportResult
 from app.services.base import BaseService
 from app.services.dataset_adapters import (
@@ -27,7 +26,6 @@ class BenchmarkImportService(BaseService):
         self,
         *,
         name: str,
-        version: str,
         content: bytes,
         file_name: str,
         mime_type: str | None = None,
@@ -56,40 +54,47 @@ class BenchmarkImportService(BaseService):
             base_dir=base_dir,
         )
         benchmark = self._get_or_create_benchmark(name)
-        existing = self.uow.benchmark_versions.list(
+        existing_cases = self.uow.test_cases.list(
             page=1,
-            page_size=1,
+            page_size=100000,
             benchmark_id=benchmark.id,
-            version=version,
         )
-        if existing:
-            raise ValueError(f"benchmark version already exists: {benchmark.slug}/{version}")
-
-        benchmark_version = BenchmarkVersion(
-            benchmark_id=benchmark.id,
-            version=version,
-            source_file_id=stored_file.id,
-            raw_schema={
-                "adapter": match.adapter,
-                "adapter_display_name": match.display_name,
-                "adapter_confidence": match.confidence,
-                "field_mapping": match.field_mapping,
-                "source_file": file_name,
-                "detection": match.note,
-            },
-            checksum=checksum,
-            case_count=0,
-            imported_at=datetime.now(timezone.utc),
-            status="importing",
-        )
-        self.uow.benchmark_versions.add(benchmark_version)
+        existing_by_external_id = {item.external_id: item for item in existing_cases}
+        existing_by_content_hash = {
+            item.content_hash: item
+            for item in existing_cases
+            if item.content_hash
+        }
+        benchmark.source_file_id = stored_file.id
+        benchmark.raw_schema = {
+            "adapter": match.adapter,
+            "adapter_display_name": match.display_name,
+            "adapter_confidence": match.confidence,
+            "field_mapping": match.field_mapping,
+            "source_file": file_name,
+            "detection": match.note,
+        }
+        benchmark.checksum = checksum
+        benchmark.imported_at = datetime.now(timezone.utc)
 
         valid_cases: list[tuple[int, CanonicalCase, TestCase]] = []
+        skipped_count = 0
         for row_number, item in raw_rows:
             try:
                 case = adapter.normalize(item, row_number, file_name)
-                test_case = self._build_test_case(benchmark_version.id, case)
+                content_hash = self._content_hash(case)
+                if content_hash in existing_by_content_hash:
+                    skipped_count += 1
+                    continue
+                existing = existing_by_external_id.get(case.external_id)
+                if existing is not None:
+                    raise ValueError(
+                        f"external_id already exists with different content: {case.external_id}"
+                    )
+                test_case = self._build_test_case(benchmark.id, case)
                 self.uow.test_cases.add(test_case)
+                existing_by_external_id[case.external_id] = test_case
+                existing_by_content_hash[content_hash] = test_case
                 valid_cases.append((row_number, case, test_case))
             except Exception as exc:
                 errors.append(BenchmarkImportError(row_number=row_number, message=str(exc)))
@@ -101,15 +106,14 @@ class BenchmarkImportService(BaseService):
             type_counts[case.dataset_type] = type_counts.get(case.dataset_type, 0) + 1
         type_counts = {key: value for key, value in type_counts.items() if value}
 
-        benchmark_version.case_count = len(valid_cases)
-        benchmark_version.status = "ready" if valid_cases else "failed"
+        benchmark.case_count = self.uow.test_cases.count(benchmark_id=benchmark.id)
         benchmark.status = "active"
         self.uow.session.flush()
 
         return BenchmarkImportResult(
             benchmark_id=benchmark.id,
-            benchmark_version_id=benchmark_version.id,
             imported_count=len(valid_cases),
+            skipped_count=skipped_count,
             failed_count=len(errors),
             errors=errors,
             detected_adapter=match.adapter,
@@ -176,7 +180,16 @@ class BenchmarkImportService(BaseService):
         return rows, errors
 
     def _parse_csv(self, content: bytes) -> tuple[list[tuple[int, dict[str, Any]]], list[BenchmarkImportError]]:
-        reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig")))
+        text = None
+        for encoding in ("utf-8-sig", "gb18030"):
+            try:
+                text = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            raise ValueError("CSV 文件必须使用 UTF-8 或 GB18030 编码")
+        reader = csv.DictReader(io.StringIO(text))
         rows = [
             (index, {key: value for key, value in item.items() if key is not None})
             for index, item in enumerate(reader, start=2)
@@ -197,15 +210,13 @@ class BenchmarkImportService(BaseService):
         )
         return self.uow.benchmarks.add(benchmark)
 
-    def _build_test_case(self, benchmark_version_id: int, case: CanonicalCase) -> TestCase:
-        content_hash = hashlib.sha256(
-            f"{case.system_prompt or ''}\n{case.prompt}".encode("utf-8")
-        ).hexdigest()
+    def _build_test_case(self, benchmark_id: int, case: CanonicalCase) -> TestCase:
+        content_hash = self._content_hash(case)
         # 双保险：即使适配器漏掉规范化，这里也保证写入合法枚举
         dataset_type = normalize_dataset_type(case.dataset_type)
         sample_kind = normalize_sample_kind(case.sample_kind)
         return TestCase(
-            benchmark_version_id=benchmark_version_id,
+            benchmark_id=benchmark_id,
             external_id=case.external_id[:128],
             prompt=case.prompt,
             system_prompt=case.system_prompt,
@@ -219,6 +230,15 @@ class BenchmarkImportService(BaseService):
         )
 
     @staticmethod
+    def _content_hash(case: CanonicalCase) -> str:
+        return hashlib.sha256(
+            f"{case.system_prompt or ''}\n{case.prompt}".encode("utf-8")
+        ).hexdigest()
+
+    @staticmethod
     def _slugify(name: str) -> str:
-        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-        return slug[:120] if slug else f"benchmark-{uuid4().hex[:8]}"
+        slug = re.sub(r"[^\w]+", "-", name.strip().lower(), flags=re.UNICODE).strip("-")
+        if slug:
+            return slug[:120]
+        digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:12]
+        return f"benchmark-{digest}"

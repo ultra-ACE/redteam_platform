@@ -5,6 +5,7 @@ import time
 from app.db.session import SessionLocal
 from app.services import (
     JudgeEvaluationService,
+    ManualReviewService,
     ReportAutomationService,
     ReportService,
     RuleValidationService,
@@ -158,6 +159,7 @@ def validate_rules(attempt_id: int) -> None:
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         RuleValidationService(uow).validate_attempt(attempt_id)
+        ManualReviewService(uow).ensure_for_attempt(attempt_id)
         rule_elapsed = _elapsed_ms(started)
         attempt = uow.task_attempts.get(attempt_id)
         task_case = uow.task_cases.get(attempt.task_case_id) if attempt else None

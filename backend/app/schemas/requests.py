@@ -46,7 +46,8 @@ class ModelUpdateRequest(BaseModel):
 
 
 class AttackTemplateCreateRequest(BaseModel):
-    method_code: AttackMethodCode
+    method_code: AttackMethodCode = AttackMethodCode.custom
+    library_name: str = "默认模板库"
     name: str
     template_text: str
     variables: list[str] = Field(default_factory=list)
@@ -55,6 +56,7 @@ class AttackTemplateCreateRequest(BaseModel):
 
 
 class AttackTemplateUpdateRequest(BaseModel):
+    library_name: str | None = None
     name: str | None = None
     template_text: str | None = None
     variables: list[str] | None = None
@@ -105,8 +107,7 @@ class ModelBinding(BaseModel):
 
 class EvaluationTaskCreateRequest(BaseModel):
     name: str
-    # 旧任务仍可传版本；新任务改为直接选种子
-    benchmark_version_id: int | None = None
+    benchmark_id: int | None = None
     seed_test_case_ids: list[int] = Field(default_factory=list)
     model_bindings: list[ModelBinding]
     attack_template_ids: list[int] = Field(default_factory=list)
@@ -117,8 +118,8 @@ class EvaluationTaskCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def _require_seed_source(self) -> "EvaluationTaskCreateRequest":
-        if not self.seed_test_case_ids and self.benchmark_version_id is None:
-            raise ValueError("seed_test_case_ids 与 benchmark_version_id 至少提供一个")
+        if not self.seed_test_case_ids and self.benchmark_id is None:
+            raise ValueError("seed_test_case_ids 与 benchmark_id 至少提供一个")
         return self
 
 

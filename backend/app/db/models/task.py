@@ -15,8 +15,8 @@ class EvaluationTask(BaseModel):
     )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    benchmark_version_id: Mapped[int | None] = mapped_column(
-        PKType, ForeignKey("benchmark_versions.id"), nullable=True
+    benchmark_id: Mapped[int | None] = mapped_column(
+        PKType, ForeignKey("benchmarks.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(32), default="draft", nullable=False)
     progress: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)

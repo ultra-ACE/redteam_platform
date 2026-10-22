@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ApiOutlined,
   BarChartOutlined,
-  BugOutlined,
   FileDoneOutlined,
   FileSearchOutlined,
   FileTextOutlined,
@@ -35,8 +34,7 @@ const menuItems = [
     label: '评测资产',
     children: [
       { key: '/models', icon: <RobotOutlined />, label: '模型管理' },
-      { key: '/benchmarks', icon: <FileSearchOutlined />, label: 'Benchmark' },
-      { key: '/attack-templates', icon: <BugOutlined />, label: '攻击模板' },
+      { key: '/benchmarks', icon: <FileSearchOutlined />, label: '评测资产' },
     ],
   },
   {
@@ -63,8 +61,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: '评测任务', subtitle: '创建、执行和监控越狱安全评测任务' },
   '/statistics': { title: '统计分析', subtitle: '查看攻击成功率、Judge 判定和数据集类型分布' },
   '/models': { title: '模型管理', subtitle: '配置被测模型和 Judge 模型适配器' },
-  '/benchmarks': { title: 'Benchmark 管理', subtitle: '导入异构 Benchmark 并查看标准化测试用例' },
-  '/attack-templates': { title: '攻击模板', subtitle: '管理越狱攻击方法和 Prompt 模板' },
+  '/benchmarks': { title: '评测资产', subtitle: '管理种子问题、数据集和官方攻击模板' },
   '/tasks': { title: '评测任务', subtitle: '创建、执行和监控越狱安全评测任务' },
   '/results': { title: '结果查询', subtitle: '查看逐条评测结果、Judge 判断和规则命中' },
   '/reviews': { title: '人工复核', subtitle: '处理低可信度、规则冲突和边界结果' },

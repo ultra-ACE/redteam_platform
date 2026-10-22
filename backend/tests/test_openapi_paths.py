@@ -12,7 +12,6 @@ def test_openapi_contains_expected_paths() -> None:
         "/health",
         "/benchmarks/import",
         "/benchmarks",
-        "/benchmarks/{benchmark_id}/versions",
         "/test-cases",
         "/test-cases/{test_case_id}",
         "/models",

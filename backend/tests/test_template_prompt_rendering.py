@@ -51,6 +51,38 @@ def test_create_template_without_placeholder_is_allowed() -> None:
         assert template.template_text == "直接请求"
 
 
+def test_create_template_defaults_to_custom_method() -> None:
+    with _session() as session:
+        service = AttackTemplateService(UnitOfWork(session))
+        template = service.create_template(
+            AttackTemplateCreateRequest(
+                name="自定义模板",
+                template_text="问题：{prompt}",
+                variables=["prompt"],
+                version="v1",
+            )
+        )
+        session.commit()
+        assert template.method_code == "custom"
+        assert template.library_name == "默认模板库"
+
+
+def test_create_template_with_library_name() -> None:
+    with _session() as session:
+        service = AttackTemplateService(UnitOfWork(session))
+        template = service.create_template(
+            AttackTemplateCreateRequest(
+                library_name="官方越狱模板库",
+                name="DAN",
+                template_text="问题：{prompt}",
+                variables=["prompt"],
+                version="v1",
+            )
+        )
+        session.commit()
+        assert template.library_name == "官方越狱模板库"
+
+
 def test_render_appends_missing_prompt() -> None:
     with _session() as session:
         template = AttackTemplate(
