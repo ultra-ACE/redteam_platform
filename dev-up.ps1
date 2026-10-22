@@ -70,8 +70,8 @@ Write-Host "[docker] applying latest migrations ..."
 docker compose run --rm migrate
 if ($LASTEXITCODE -ne 0) { throw "database migration failed" }
 
-Write-Host "[docker] starting api, worker and frontend ..."
-docker compose up -d api worker frontend
+Write-Host "[docker] starting api, worker, report-worker and frontend ..."
+docker compose up -d api worker report-worker frontend
 if ($LASTEXITCODE -ne 0) { throw "failed to start application services" }
 
 # ---------- 5. Health check ----------

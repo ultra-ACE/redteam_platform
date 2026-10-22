@@ -26,6 +26,10 @@ celery_app.conf.update(
     # T8：提高 Worker 吞吐。CLI 的 --concurrency 仍可覆盖该值。
     worker_concurrency=int(os.getenv("CELERY_WORKER_CONCURRENCY", "4")),
     worker_prefetch_multiplier=int(os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1")),
+    task_default_queue="celery",
+    task_routes={
+        "workers.generate_report": {"queue": "reports"},
+    },
 )
 
 celery_app.autodiscover_tasks(["app.workers"])

@@ -89,7 +89,30 @@ services:
     image: llm-eval-backend:local
     build:
       context: .
-    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=4", "-Q", "celery"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://llm_eval:llm_eval@postgres:5432/llm_eval
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      DATA_DIR: /app/data
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      TZ: Asia/Shanghai
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://127.0.0.1:5173}
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  report-worker:
+    image: llm-eval-backend:local
+    build:
+      context: .
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "--loglevel=info", "--concurrency=1", "-Q", "reports"]
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://llm_eval:llm_eval@postgres:5432/llm_eval
