@@ -2,7 +2,7 @@
 
 后端或 Worker 重启后，扫描所有未完成的评测任务：
 
-- ``pending`` 用例重新入队；
+- ``queued`` / ``running`` 任务的 ``pending`` 用例重新入队；
 - heartbeat 超时的 ``running`` 用例重新置为 ``pending``（并累加 retry_count）；
 - ``succeeded`` / ``cancelled`` 用例不再执行。
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 #: running 用例超过该时长未更新心跳，则视为已失联
 HEARTBEAT_TIMEOUT_SECONDS = 180
 #: 未完成任务的状态
-ACTIVE_TASK_STATUSES = ("queued", "running", "paused")
+ACTIVE_TASK_STATUSES = ("queued", "running")
 
 
 def _now() -> datetime:

@@ -459,6 +459,30 @@ def test_recovery_finalizes_task_without_pending_cases(monkeypatch) -> None:
         assert task.progress == 1.0
 
 
+def test_recovery_does_not_requeue_paused_task(monkeypatch) -> None:
+    import app.workers.recovery as recovery
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    factory = _production_session_factory(engine)
+    monkeypatch.setattr(recovery, "SessionLocal", factory)
+
+    with factory() as session:
+        task_id = _build_task(session, case_count=2)
+        session.get(EvaluationTask, task_id).status = "paused"
+        session.get(EvaluationTask, task_id).pause_requested = True
+        session.commit()
+
+    summary = recovery.recover_incomplete_tasks()
+    assert summary["scanned_tasks"] == 0
+    assert summary["pending_case_ids"] == []
+
+    with factory() as session:
+        task = session.get(EvaluationTask, task_id)
+        assert task.status == "paused"
+        assert task.pause_requested is True
+
+
 # --- T4/T5/T6/T7/T8 成员 3 扩展测试 -----------------------------------------
 
 

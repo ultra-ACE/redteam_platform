@@ -23,12 +23,19 @@ def _elapsed_ms(started: float) -> int:
 
 def _run_task_case(task_case_id: int, celery_task_id: str | None) -> int | None:
     """PAIR 用例必须同步执行（每轮 Judge 内部会 asyncio.run），普通用例走异步链路。"""
-    with SessionLocal() as session:
-        uow = UnitOfWork(session)
-        service = TaskExecutionService(uow)
-        if service.requires_iterative(task_case_id):
-            return service.run_iterative_task_case(task_case_id, celery_task_id=celery_task_id)
-        return asyncio.run(service.run_task_case(task_case_id, celery_task_id=celery_task_id))
+    try:
+        with SessionLocal() as session:
+            uow = UnitOfWork(session)
+            service = TaskExecutionService(uow)
+            if service.requires_iterative(task_case_id):
+                return service.run_iterative_task_case(task_case_id, celery_task_id=celery_task_id)
+            return asyncio.run(service.run_task_case(task_case_id, celery_task_id=celery_task_id))
+    except Exception as exc:
+        logger.exception("task case %s failed unexpectedly", task_case_id)
+        with SessionLocal() as session:
+            service = TaskExecutionService(UnitOfWork(session))
+            service.fail_task_case(task_case_id, "WORKER_EXCEPTION", str(exc))
+        return None
 
 
 @celery_app.task(name="workers.dispatch_task")
