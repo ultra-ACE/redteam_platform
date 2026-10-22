@@ -66,6 +66,25 @@ async def update_model(
     return ok(Model.model_validate(model).model_dump())
 
 
+@router.delete(
+    "/models/{model_id}",
+    response_model=ApiResponse[dict[str, int]],
+    operation_id="deleteModel",
+)
+async def delete_model(
+    model_id: int,
+    _: None = Depends(require_local_token),
+    uow: UnitOfWork = Depends(get_uow),
+) -> dict:
+    try:
+        deleted = ModelService(uow).delete_model(model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="model not found")
+    return ok({"deleted": 1})
+
+
 @router.post(
     "/models/{model_id}/health-check",
     response_model=ApiResponse[HealthCheckData],

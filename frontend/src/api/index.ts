@@ -51,6 +51,11 @@ export const updateModel = async (modelId: number, payload: Record<string, unkno
   return data.data;
 };
 
+export const deleteModel = async (modelId: number) => {
+  const { data } = await apiClient.delete<ApiEnvelope<{ deleted: number }>>(`/models/${modelId}`);
+  return data.data;
+};
+
 export type ModelHealthResult = {
   model_id: number;
   status: string;

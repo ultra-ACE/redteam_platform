@@ -135,6 +135,22 @@ class ModelService(BaseService):
         self.uow.session.flush()
         return model
 
+    def delete_model(self, model_id: int) -> bool | None:
+        model = self.uow.models.get(model_id)
+        if model is None:
+            return None
+        task_bindings = self.uow.task_model_bindings.count(model_id=model_id)
+        attempts = self.uow.task_attempts.count(model_id=model_id)
+        judge_profiles = self.uow.judge_profiles.count(judge_model_id=model_id)
+        if task_bindings or attempts or judge_profiles:
+            raise ValueError(
+                "该模型仍被任务、历史结果或 Judge 配置引用，无法删除。"
+                f"任务绑定 {task_bindings}，历史尝试 {attempts}，Judge 配置 {judge_profiles}。"
+            )
+        self.uow.models.delete(model)
+        self.uow.session.flush()
+        return True
+
     async def health_check(self, model_id: int) -> HealthStatus | None:
         model = self.uow.models.get(model_id)
         if model is None:

@@ -1,4 +1,8 @@
+from types import SimpleNamespace
+
 from app.services.reporting import ReportService
+from app.services.results import EvaluationResultService
+from app.services.statistics import StatisticsService
 
 
 def test_report_contains_attack_method_and_only_unsafe_outputs() -> None:
@@ -79,3 +83,39 @@ def test_report_contains_attack_method_and_only_unsafe_outputs() -> None:
     assert "有害用例模型输出" in html
     assert "这是完整的有害输出" in html
     assert "逐条结果摘要" not in html
+
+
+def test_report_limits_unsafe_cases_to_ten(monkeypatch) -> None:
+    representatives = [
+        SimpleNamespace(
+            attempt_id=index,
+            task_case_id=index,
+            external_id=f"case-{index}",
+            model_id=1,
+            round_no=1,
+            attack_strategy="pair",
+            prompt_excerpt="prompt",
+            model_output_excerpt="output",
+            judge=SimpleNamespace(verdict="unsafe", confidence=0.8),
+        )
+        for index in range(15)
+    ]
+
+    monkeypatch.setattr(
+        StatisticsService,
+        "select_case_results",
+        staticmethod(lambda items: items),
+    )
+    monkeypatch.setattr(
+        EvaluationResultService,
+        "get_attempt_detail",
+        lambda self, attempt_id: None,
+    )
+    uow = SimpleNamespace(
+        models=SimpleNamespace(get=lambda model_id: None),
+        attack_templates=SimpleNamespace(get=lambda template_id: None),
+    )
+
+    cases = ReportService(uow)._build_unsafe_cases(representatives)
+
+    assert len(cases) == 10

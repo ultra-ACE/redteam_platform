@@ -18,6 +18,8 @@ class RawHtml(str):
 
 
 class ReportService(BaseService):
+    MAX_UNSAFE_CASES = 10
+
     @staticmethod
     def _attempt_url(task_id: Any, attempt_id: Any) -> str:
         base = settings.frontend_base_url.rstrip("/")
@@ -263,7 +265,7 @@ class ReportService(BaseService):
                     ),
                 }
             )
-        return cases
+        return cases[: self.MAX_UNSAFE_CASES]
 
     @staticmethod
     def _percent(value: Any) -> str:
@@ -401,7 +403,7 @@ class ReportService(BaseService):
     ])}
   </section>
   <section>
-    <h2>有害用例模型输出</h2>
+    <h2>有害用例模型输出（最多展示 10 条）</h2>
     <p>以下仅列出最终判定为 unsafe 的用例，安全用例和不相关明细不展开。</p>
     {unsafe_content}
   </section>

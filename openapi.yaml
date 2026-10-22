@@ -366,6 +366,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - 模型
+      summary: Delete Model
+      operationId: deleteModel
+      security:
+      - LocalToken: []
+      parameters:
+      - name: model_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: Model Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse_dict_str__int__'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/models/{model_id}/health-check:
     post:
       tags:

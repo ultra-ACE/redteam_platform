@@ -1,11 +1,21 @@
 import { useState } from 'react';
-import { PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { Alert, Button, Form, Input, Modal, Select, Space, Table, Tag, message } from 'antd';
+import { DeleteOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { checkModelHealth, createModel, listModels, updateModel } from '../api';
+import { checkModelHealth, createModel, deleteModel, listModels, updateModel } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { ModelRecord } from '../types/api';
 import { formatDateTime } from '../utils/format';
+
+function modelErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (
+      error as { response?: { data?: { detail?: unknown } } }
+    ).response;
+    if (typeof response?.data?.detail === 'string') return response.data.detail;
+  }
+  return error instanceof Error ? error.message : '操作失败';
+}
 
 export function ModelsPage() {
   const [open, setOpen] = useState(false);
@@ -25,13 +35,27 @@ export function ModelsPage() {
       form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['models'] });
     },
-    onError: (error: Error) => message.error(error.message),
+    onError: (error: unknown) => message.error(modelErrorMessage(error)),
   });
 
   const [checkingModelId, setCheckingModelId] = useState<number | null>(null);
   const [healthResults, setHealthResults] = useState<
     Record<number, { status: string; latencyMs?: number; error?: string }>
   >({});
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteModel,
+    onSuccess: (_, modelId) => {
+      message.success('模型已删除');
+      setHealthResults((current) => {
+        const next = { ...current };
+        delete next[modelId];
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ['models'] });
+    },
+    onError: (error: unknown) => message.error(modelErrorMessage(error)),
+  });
 
   const runHealthCheck = async (modelId: number) => {
     setCheckingModelId(modelId);
@@ -144,7 +168,7 @@ export function ModelsPage() {
             },
             {
               title: '操作',
-              width: 190,
+              width: 260,
               render: (_, record) => (
                 <Space>
                   <Button
@@ -166,6 +190,23 @@ export function ModelsPage() {
                   >
                     连接测试
                   </Button>
+                  <Popconfirm
+                    title="删除该模型？"
+                    description="仅未被任务、历史结果或 Judge 配置引用的模型可以删除。"
+                    okText="删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => deleteMutation.mutate(record.model_id)}
+                  >
+                    <Button
+                      type="link"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={deleteMutation.isPending}
+                    >
+                      删除
+                    </Button>
+                  </Popconfirm>
                 </Space>
               ),
             },
