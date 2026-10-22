@@ -75,6 +75,7 @@ class ReportService(BaseService):
         try:
             statistics = StatisticsService(self.uow).get_task_statistics(report.task_id)
             results = EvaluationResultService(self.uow).list_all_results(report.task_id)
+            unsafe_cases = self._build_unsafe_cases(results)
             data = {
                 "task": {
                     "task_id": task.id,
@@ -85,8 +86,9 @@ class ReportService(BaseService):
                     "completed_cases": task.completed_cases,
                     "failed_cases": task.failed_cases,
                 },
+                "context": self._task_context(task),
                 "statistics": statistics.model_dump(mode="json") if statistics else {},
-                "results": [item.model_dump(mode="json") for item in results],
+                "unsafe_cases": unsafe_cases,
             }
             content = self._build_html(data).encode("utf-8")
             output_dir = (base_dir or (Path(settings.data_dir) / "reports")) / str(report.id)
@@ -122,25 +124,221 @@ class ReportService(BaseService):
                 self.uow.commit()
             return report
 
+    def _task_context(self, task) -> dict[str, Any]:
+        config = dict(task.config or {})
+        bindings = self.uow.task_model_bindings.list(
+            page=1,
+            page_size=100,
+            task_id=task.id,
+        )
+        target_models: list[dict[str, Any]] = []
+        attacker_model: dict[str, Any] | None = None
+        for binding in bindings:
+            model = self.uow.models.get(binding.model_id)
+            item = {
+                "model_id": binding.model_id,
+                "name": model.name if model else f"模型 {binding.model_id}",
+                "provider": model.provider if model else None,
+                "adapter_type": model.adapter_type if model else None,
+                "model_name": model.model_name if model else None,
+            }
+            if binding.role == "attacker":
+                attacker_model = item
+            elif binding.role == "target":
+                target_models.append(item)
+
+        judge_profiles: list[dict[str, Any]] = []
+        for profile_id in config.get("judge_profile_ids") or []:
+            profile = self.uow.judge_profiles.get(int(profile_id))
+            if profile is None:
+                continue
+            judge_model = (
+                self.uow.models.get(profile.judge_model_id)
+                if profile.judge_model_id
+                else None
+            )
+            judge_profiles.append(
+                {
+                    "judge_profile_id": profile.id,
+                    "name": profile.name,
+                    "judge_type": profile.judge_type,
+                    "strategy": profile.strategy,
+                    "judge_model_name": judge_model.name if judge_model else None,
+                    "judge_model_id": profile.judge_model_id,
+                }
+            )
+
+        templates: list[dict[str, Any]] = []
+        for template_id in config.get("attack_template_ids") or []:
+            template = self.uow.attack_templates.get(int(template_id))
+            if template is None:
+                continue
+            templates.append(
+                {
+                    "attack_template_id": template.id,
+                    "library_name": template.library_name,
+                    "name": template.name,
+                    "version": template.version,
+                }
+            )
+
+        benchmark = (
+            self.uow.benchmarks.get(task.benchmark_id)
+            if task.benchmark_id is not None
+            else None
+        )
+        strategy = config.get("attack_strategy") or {}
+        strategy_code = str(strategy.get("code") or "static")
+        method_labels = {
+            "static": "静态模板",
+            "base64": "Base64 编码变换",
+            "puzzler": "Puzzler 谜题改写",
+            "pair": "PAIR 多轮迭代",
+        }
+        strategy_config = strategy.get("config") or {}
+        max_rounds = (
+            config.get("max_rounds")
+            or strategy_config.get("max_rounds")
+            or (config.get("execution") or {}).get("max_rounds")
+        )
+        return {
+            "benchmark_name": benchmark.name if benchmark else None,
+            "target_models": target_models,
+            "attacker_model": attacker_model,
+            "judge_profiles": judge_profiles,
+            "templates": templates,
+            "attack_method_code": strategy_code,
+            "attack_method_label": method_labels.get(
+                strategy_code,
+                f"静态模板（{strategy_code}）",
+            ),
+            "sample_size": config.get("sample_size"),
+            "max_rounds": max_rounds,
+            "rule_set_ids": config.get("rule_set_ids") or [],
+        }
+
+    def _build_unsafe_cases(self, results: list[Any]) -> list[dict[str, Any]]:
+        cases: list[dict[str, Any]] = []
+        result_service = EvaluationResultService(self.uow)
+        for representative in StatisticsService.select_case_results(results):
+            if representative.judge is None or representative.judge.verdict != "unsafe":
+                continue
+            detail = result_service.get_attempt_detail(representative.attempt_id)
+            model = self.uow.models.get(representative.model_id)
+            template = (
+                self.uow.attack_templates.get(detail.attack_template_id)
+                if detail is not None and detail.attack_template_id
+                else None
+            )
+            judge = detail.judge if detail is not None else None
+            cases.append(
+                {
+                    "attempt_id": representative.attempt_id,
+                    "external_id": representative.external_id,
+                    "model_name": model.name if model else f"模型 {representative.model_id}",
+                    "template_name": template.name if template else None,
+                    "template_library": template.library_name if template else None,
+                    "round_no": representative.round_no,
+                    "attack_method": representative.attack_strategy,
+                    "prompt": (
+                        detail.rendered_prompt
+                        if detail is not None and detail.rendered_prompt
+                        else representative.prompt_excerpt
+                    ),
+                    "model_output": (
+                        detail.model_output
+                        if detail is not None and detail.model_output
+                        else representative.model_output_excerpt
+                    ),
+                    "judge_profile_name": (
+                        judge.judge_profile_name if judge is not None else None
+                    ),
+                    "judge_confidence": (
+                        judge.confidence
+                        if judge is not None
+                        else representative.judge.confidence
+                    ),
+                    "judge_reasoning": (
+                        judge.reasoning if judge is not None else None
+                    ),
+                }
+            )
+        return cases
+
+    @staticmethod
+    def _percent(value: Any) -> str:
+        try:
+            return f"{float(value) * 100:.1f}%"
+        except (TypeError, ValueError):
+            return "0.0%"
+
+    @staticmethod
+    def _text_block(value: Any) -> RawHtml:
+        return RawHtml(f"<pre>{html.escape(str(value or ''))}</pre>")
+
     def _build_html(self, data: dict[str, Any]) -> str:
         task = data["task"]
+        context = data["context"]
         stats = data["statistics"]
-        results = data["results"]
-        verdict_rows = list((stats.get("judge_verdict_distribution") or {}).items())
-        dataset_rows = list((stats.get("dataset_type_distribution") or {}).items())
-        result_rows = [
-            (
-                RawHtml(self._attempt_link_html(task["task_id"], item["attempt_id"])),
-                item.get("external_id") or "",
-                item.get("dataset_type") or "",
-                item.get("sample_kind") or "",
-                item.get("model_id"),
-                (item.get("judge") or {}).get("verdict", ""),
-                (item.get("rule_validation") or {}).get("hit_count", 0),
-                item.get("manual_review_status", "none"),
-            )
-            for item in results
+        unsafe_cases = data["unsafe_cases"]
+        target_rows = [
+            [
+                item["name"],
+                item["model_id"],
+                item["provider"] or "-",
+                item["adapter_type"] or "-",
+                item["model_name"] or "-",
+            ]
+            for item in context["target_models"]
         ]
+        judge_rows = [
+            [
+                item["name"],
+                item["judge_profile_id"],
+                "模型 Judge" if item["judge_type"] == "model" else "规则 Judge",
+                item["judge_model_name"] or "-",
+                item["strategy"],
+            ]
+            for item in context["judge_profiles"]
+        ]
+        template_rows = [
+            [
+                item["library_name"],
+                item["name"],
+                item["version"],
+            ]
+            for item in context["templates"]
+        ]
+        unsafe_sections = []
+        for case in unsafe_cases:
+            unsafe_sections.append(
+                f"""
+                <article class="case">
+                  <h3>{html.escape(str(case["external_id"] or "-"))} · {html.escape(case["model_name"])}</h3>
+                  {self._html_table(
+                      ["字段", "内容"],
+                      [
+                          ["攻击方式", case["attack_method"] or context["attack_method_label"]],
+                          ["模板", f'{case["template_library"] or "-"} / {case["template_name"] or "-"}'],
+                          ["迭代轮次", case["round_no"] if case["round_no"] is not None else "-"],
+                          ["Judge", case["judge_profile_name"] or "-"],
+                          ["Judge 可信度", self._percent(case["judge_confidence"])],
+                      ],
+                  )}
+                  <h4>实际发送给模型的 Prompt</h4>
+                  {self._text_block(case["prompt"])}
+                  <h4>模型输出</h4>
+                  {self._text_block(case["model_output"])}
+                  <h4>Judge 理由</h4>
+                  {self._text_block(case["judge_reasoning"] or "无")}
+                </article>
+                """
+            )
+        unsafe_content = (
+            "\n".join(unsafe_sections)
+            if unsafe_sections
+            else "<p>本次任务未发现被 Judge 判定为有害的用例。</p>"
+        )
         return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -157,30 +355,55 @@ class ReportService(BaseService):
     th, td {{ padding: 9px 10px; border-bottom: 1px solid #e7ebf2; text-align: left; vertical-align: top; }}
     th {{ background: #f2f5fa; }}
     a {{ color: #2457c5; }}
+    pre {{ white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 18px; padding: 12px; background: #f7f9fc; border-radius: 6px; }}
+    .case {{ border: 1px solid #dce3ee; border-radius: 8px; padding: 18px; margin: 16px 0; }}
+    .case h3 {{ margin-top: 0; }}
   </style>
 </head>
 <body>
 <main>
   <h1>大模型越狱攻击安全评测报告</h1>
   <section>
-    <h2>任务信息</h2>
-    {self._html_table(["任务 ID", "任务名称", "状态", "总用例", "已完成", "失败数"], [[task["task_id"], task["name"], task["status"], task["total_cases"], task["completed_cases"], task["failed_cases"]]])}
+    <h2>任务设置</h2>
+    {self._html_table(["字段", "内容"], [
+        ["任务 ID", task["task_id"]],
+        ["任务名称", task["name"]],
+        ["任务状态", task["status"]],
+        ["种子库", context["benchmark_name"] or "-"],
+        ["攻击方式", f'{context["attack_method_label"]}（{context["attack_method_code"]}）'],
+        ["采样条数", context["sample_size"] if context["sample_size"] is not None else "-"],
+        ["最大迭代轮数", context["max_rounds"] if context["max_rounds"] is not None else "-"],
+        ["规则集 ID", ", ".join(str(item) for item in context["rule_set_ids"]) or "-"],
+    ])}
+    <h3>使用的模板</h3>
+    {self._html_table(["模板库", "模板名称", "版本"], template_rows) if template_rows else "<p>未选择模板</p>"}
+  </section>
+  <section>
+    <h2>被测模型</h2>
+    {self._html_table(["模型", "ID", "Provider", "适配器", "模型名"], target_rows) if target_rows else "<p>未配置被测模型</p>"}
+    <h3>攻击模型（PAIR）</h3>
+    {self._html_table(["模型", "ID", "Provider", "适配器", "模型名"], [[context["attacker_model"]["name"], context["attacker_model"]["model_id"], context["attacker_model"]["provider"] or "-", context["attacker_model"]["adapter_type"] or "-", context["attacker_model"]["model_name"] or "-"]]) if context["attacker_model"] else "<p>本次未使用攻击模型</p>"}
+  </section>
+  <section>
+    <h2>Judge 配置</h2>
+    {self._html_table(["Judge 名称", "ID", "类型", "Judge 模型", "策略"], judge_rows) if judge_rows else "<p>使用系统默认规则 Judge</p>"}
   </section>
   <section>
     <h2>总体指标</h2>
-    {self._html_table(["指标", "数值"], [["结果总数", stats.get("total_results", 0)], ["攻击成功率", stats.get("attack_success_rate", 0)], ["Judge 平均可信度", stats.get("judge_average_trust", 0)], ["人工复核率", stats.get("manual_review_rate", 0)], ["规则命中率", stats.get("rule_hit_rate", 0)]])}
+    {self._html_table(["指标", "数值"], [
+        ["已完成用例", stats.get("total_results", 0)],
+        ["安全用例", stats.get("safe_count", 0)],
+        ["有害用例", stats.get("unsafe_count", 0)],
+        ["不确定用例", stats.get("uncertain_count", 0)],
+        ["攻击成功率", self._percent(stats.get("attack_success_rate", 0))],
+        ["Judge 平均可信度", self._percent(stats.get("judge_average_trust", 0))],
+        ["规则命中率", self._percent(stats.get("rule_hit_rate", 0))],
+    ])}
   </section>
   <section>
-    <h2>Judge 判定分布</h2>
-    {self._html_table(["判定", "数量"], verdict_rows)}
-  </section>
-  <section>
-    <h2>数据集类型分布</h2>
-    {self._html_table(["数据集类型", "数量"], dataset_rows)}
-  </section>
-  <section>
-    <h2>逐条结果摘要</h2>
-    {self._html_table(["尝试 ID", "外部用例 ID", "数据集类型", "样本类型", "模型 ID", "Judge", "规则命中", "复核状态"], result_rows)}
+    <h2>有害用例模型输出</h2>
+    <p>以下仅列出最终判定为 unsafe 的用例，安全用例和不相关明细不展开。</p>
+    {unsafe_content}
   </section>
 </main>
 </body>
