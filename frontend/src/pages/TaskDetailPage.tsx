@@ -37,6 +37,7 @@ type ResultGroup = {
   dataset_type?: string | null;
   sample_kind?: string | null;
   attempts: EvaluationResult[];
+  roundAttempts: EvaluationResult[];
 };
 
 function groupResultsByCase(items: EvaluationResult[]): ResultGroup[] {
@@ -57,20 +58,31 @@ function groupResultsByCase(items: EvaluationResult[]): ResultGroup[] {
       dataset_type: item.dataset_type,
       sample_kind: item.sample_kind,
       attempts: [item],
+      roundAttempts: [],
     });
   }
 
   return Array.from(groups.values())
-    .map((group) => ({
-      ...group,
-      attempts: [...group.attempts].sort(
+    .map((group) => {
+      const attempts = [...group.attempts].sort(
         (left, right) =>
-          (left.round_no ?? left.attempt_no) - (right.round_no ?? right.attempt_no),
-      ),
-    }))
+          left.attempt_id - right.attempt_id,
+      );
+      const latestByRound = new Map<number, EvaluationResult>();
+      for (const attempt of attempts) {
+        latestByRound.set(attempt.round_no ?? attempt.attempt_no, attempt);
+      }
+      return {
+        ...group,
+        attempts,
+        roundAttempts: Array.from(latestByRound.entries())
+          .sort(([left], [right]) => left - right)
+          .map(([, attempt]) => attempt),
+      };
+    })
     .sort((left, right) => {
-      const leftId = left.attempts[left.attempts.length - 1]?.attempt_id ?? 0;
-      const rightId = right.attempts[right.attempts.length - 1]?.attempt_id ?? 0;
+      const leftId = left.roundAttempts[left.roundAttempts.length - 1]?.attempt_id ?? 0;
+      const rightId = right.roundAttempts[right.roundAttempts.length - 1]?.attempt_id ?? 0;
       return rightId - leftId;
     });
 }
@@ -367,20 +379,20 @@ export function TaskDetailPage() {
           pagination={{ pageSize: 10 }}
           onRow={(record) => ({
             onClick: () => {
-              if (record.attempts.length === 1) {
-                openAttemptDetail(record.attempts[0].attempt_id);
+              if (record.roundAttempts.length === 1) {
+                openAttemptDetail(record.roundAttempts[0].attempt_id);
               }
             },
-            style: { cursor: record.attempts.length === 1 ? 'pointer' : 'default' },
+            style: { cursor: record.roundAttempts.length === 1 ? 'pointer' : 'default' },
           })}
           expandable={{
-            rowExpandable: (record) => record.attempts.length > 1,
+            rowExpandable: (record) => record.roundAttempts.length > 1,
             expandedRowRender: (record) => (
               <Table<EvaluationResult>
                 rowKey="attempt_id"
                 size="small"
                 pagination={false}
-                dataSource={record.attempts}
+                dataSource={record.roundAttempts}
                 onRow={(attempt) => ({
                   onClick: () => openAttemptDetail(attempt.attempt_id),
                   style: { cursor: 'pointer' },
@@ -438,9 +450,14 @@ export function TaskDetailPage() {
               title: '迭代总轮数',
               width: 110,
               render: (_, record) => (
-                <Tag color={record.attempts.length > 1 ? 'purple' : 'default'}>
-                  {record.attempts.length} 轮
-                </Tag>
+                <Space size={4} wrap>
+                  <Tag color={record.roundAttempts.length > 1 ? 'purple' : 'default'}>
+                    {record.roundAttempts.length} 轮
+                  </Tag>
+                  {record.attempts.length > record.roundAttempts.length ? (
+                    <Tag>{record.attempts.length} 次尝试</Tag>
+                  ) : null}
+                </Space>
               ),
             },
             {
@@ -462,7 +479,9 @@ export function TaskDetailPage() {
               width: 110,
               render: (_, record) => (
                 <JudgeVerdictTag
-                  verdict={record.attempts[record.attempts.length - 1]?.judge?.verdict}
+                  verdict={
+                    record.roundAttempts[record.roundAttempts.length - 1]?.judge?.verdict
+                  }
                 />
               ),
             },
@@ -470,13 +489,14 @@ export function TaskDetailPage() {
               title: '规则命中',
               width: 110,
               render: (_, record) =>
-                record.attempts[record.attempts.length - 1]?.rule_validation?.hit_count ?? 0,
+                record.roundAttempts[record.roundAttempts.length - 1]?.rule_validation
+                  ?.hit_count ?? 0,
             },
             {
               title: '状态',
               width: 110,
               render: (_, record) =>
-                record.attempts[record.attempts.length - 1]?.status ?? '-',
+                record.roundAttempts[record.roundAttempts.length - 1]?.status ?? '-',
             },
           ]}
         />
