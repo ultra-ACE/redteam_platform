@@ -25,7 +25,11 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
 
   return (
     <Drawer
-      title={`尝试详情 · #${attemptId ?? ''}`}
+      title={
+        detail?.round_no
+          ? `尝试详情 · #${attemptId ?? ''} · 第 ${detail.round_no} 轮`
+          : `尝试详情 · #${attemptId ?? ''}`
+      }
       placement="right"
       width={880}
       open={Boolean(attemptId)}
@@ -60,6 +64,11 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
             <Descriptions.Item label="攻击模板">
               {detail.attack_template_name ?? (detail.attack_template_id ? `模板 #${detail.attack_template_id}` : '未使用')}
             </Descriptions.Item>
+            <Descriptions.Item label="迭代轮次">
+              {detail.round_no ? <Tag color="purple">第 {detail.round_no} 轮</Tag> : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="攻击方式">{detail.attack_strategy ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="尝试序号">#{detail.attempt_no}</Descriptions.Item>
             <Descriptions.Item label="执行状态"><Tag>{detail.status}</Tag></Descriptions.Item>
             <Descriptions.Item label="耗时">
               {detail.latency_ms === null || detail.latency_ms === undefined ? '-' : `${detail.latency_ms} ms`}
@@ -71,6 +80,14 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
           <Card size="small" title="原始种子 / 行为">
             <pre className="code-block">{detail.prompt ?? '-'}</pre>
           </Card>
+
+          {detail.attack_prompt ? (
+            <Card size="small" title="攻击模型本轮生成的 Prompt">
+              <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
+                {detail.attack_prompt}
+              </pre>
+            </Card>
+          ) : null}
 
           <Card size="small" title="实际发送给模型的 Prompt">
             <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>

@@ -240,6 +240,9 @@ class EvaluationResult(ORMSchema):
     attack_template_id: int | None = None
     dataset_type: DatasetType | None = None
     sample_kind: SampleKind | None = None
+    attempt_no: int = 1
+    round_no: int | None = None
+    attack_strategy: str | None = None
     status: AttemptStatus
     prompt_excerpt: str | None = None
     model_output_excerpt: str | None = None
@@ -327,6 +330,9 @@ class AttemptDetail(ORMSchema):
     dataset_type: DatasetType | None = None
     sample_kind: SampleKind | None = None
     attempt_no: int = 1
+    round_no: int | None = None
+    attack_strategy: str | None = None
+    attack_prompt: str | None = None
     status: AttemptStatus
     prompt: str | None = None
     system_prompt: str | None = None

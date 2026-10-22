@@ -312,6 +312,19 @@ export function TaskDetailPage() {
               ellipsis: { showTitle: true },
             },
             {
+              title: '迭代轮次',
+              dataIndex: 'round_no',
+              width: 100,
+              render: (value: number | null | undefined) =>
+                value ? <Tag color="purple">第 {value} 轮</Tag> : '-',
+            },
+            {
+              title: '攻击方式',
+              dataIndex: 'attack_strategy',
+              width: 110,
+              render: (value: string | null | undefined) => value || '-',
+            },
+            {
               title: '测试 Prompt',
               dataIndex: 'prompt_excerpt',
               ellipsis: { showTitle: true },

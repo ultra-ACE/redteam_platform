@@ -185,6 +185,9 @@ export type EvaluationResult = {
   attack_template_id?: number | null;
   dataset_type?: DatasetType | null;
   sample_kind?: SampleKind | null;
+  attempt_no: number;
+  round_no?: number | null;
+  attack_strategy?: string | null;
   status: string;
   prompt_excerpt?: string | null;
   model_output_excerpt?: string | null;
@@ -351,6 +354,9 @@ export type AttemptDetail = {
   dataset_type?: DatasetType | null;
   sample_kind?: SampleKind | null;
   attempt_no: number;
+  round_no?: number | null;
+  attack_strategy?: string | null;
+  attack_prompt?: string | null;
   status: string;
   prompt?: string | null;
   system_prompt?: string | null;

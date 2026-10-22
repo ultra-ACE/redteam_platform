@@ -2817,6 +2817,21 @@ components:
           type: integer
           title: Attempt No
           default: 1
+        round_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Round No
+        attack_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attack Strategy
+        attack_prompt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attack Prompt
         status:
           $ref: '#/components/schemas/AttemptStatus'
         prompt:
@@ -3031,6 +3046,20 @@ components:
           anyOf:
           - $ref: '#/components/schemas/SampleKind'
           - type: 'null'
+        attempt_no:
+          type: integer
+          title: Attempt No
+          default: 1
+        round_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Round No
+        attack_strategy:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Attack Strategy
         status:
           $ref: '#/components/schemas/AttemptStatus'
         prompt_excerpt:

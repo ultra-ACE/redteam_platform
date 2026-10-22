@@ -87,6 +87,7 @@ class EvaluationResultService(BaseService):
             )
 
         rendered_prompt = self._rendered_prompt(attempt, test_case)
+        snapshot = attempt.input_snapshot or {}
         return EvaluationResult(
             attempt_id=attempt.id,
             task_case_id=task_case.id,
@@ -96,6 +97,9 @@ class EvaluationResultService(BaseService):
             attack_template_id=task_case.attack_template_id,
             dataset_type=test_case.dataset_type,
             sample_kind=test_case.sample_kind,
+            attempt_no=attempt.attempt_no,
+            round_no=self._round_no(attempt),
+            attack_strategy=self._attack_strategy(task_case),
             status=attempt.status,
             prompt_excerpt=rendered_prompt[:200],
             model_output_excerpt=(attempt.output_text or "")[:500],
@@ -113,6 +117,7 @@ class EvaluationResultService(BaseService):
             return None
 
         task_case = self.uow.task_cases.get(attempt.task_case_id)
+        snapshot = attempt.input_snapshot or {}
         test_case = self.uow.test_cases.get(task_case.test_case_id) if task_case else None
         model = self.uow.models.get(attempt.model_id)
         template = (
@@ -134,6 +139,13 @@ class EvaluationResultService(BaseService):
             dataset_type=test_case.dataset_type if test_case else None,
             sample_kind=test_case.sample_kind if test_case else None,
             attempt_no=attempt.attempt_no,
+            round_no=self._round_no(attempt),
+            attack_strategy=self._attack_strategy(task_case),
+            attack_prompt=(
+                str(snapshot.get("attack_prompt"))
+                if snapshot.get("attack_prompt")
+                else None
+            ),
             status=attempt.status,
             prompt=test_case.prompt if test_case else None,
             system_prompt=(
@@ -164,6 +176,22 @@ class EvaluationResultService(BaseService):
         if snapshot_prompt:
             return str(snapshot_prompt)
         return test_case.prompt if test_case and test_case.prompt else ""
+
+    @staticmethod
+    def _round_no(attempt: TaskAttempt) -> int | None:
+        value = (attempt.input_snapshot or {}).get("round_no")
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _attack_strategy(task_case: TaskCase | None) -> str | None:
+        if task_case is None:
+            return None
+        config = task_case.case_config or {}
+        value = config.get("strategy_code") or config.get("strategy_type")
+        return str(value) if value else None
 
     def _build_judge_detail(self, judge_result: JudgeResult | None) -> JudgeDetail | None:
         if judge_result is None:
