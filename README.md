@@ -10,20 +10,19 @@
 
 - **模型管理**：支持 OpenAI-compatible、Ollama、Custom HTTP、Mock 四种适配器；
   支持新建、编辑、启停与连接测试；API Key 在接口和页面上只显示掩码。
-- **Benchmark 导入**：自动识别 HarmBench、AdvBench、TDC2023 与中文通用数据集，
-  归一为统一的测试用例；保留原始标签，不做风险类别映射。
+- **种子库导入**：自动识别 HarmBench、AdvBench、TDC2023 与中文通用数据集，
+  归一为统一的种子问题；只使用种子库名称，不再维护 Benchmark 版本。
 - **数据集类型**：`benign` / `harmful` / `jailbreak`；越狱样本再区分
   `seed`（种子）与 `template`（模板）。
-- **攻击模板**：攻击方式固定为 `direct_request`、`role_play`、
-  `prefix_injection`、`refusal_suppression` 四种；模板支持变量校验、
-  预览与版本发布。
-- **评测任务**：支持多模型对比、暂停、继续、取消；Worker 重启后自动恢复
-  未完成用例，已成功用例不会重跑。
+- **模板库**：模板按模板库组织，支持 JSON/JSONL/TXT 导入、变量校验、
+  预览和模板自身版本管理。
+- **攻击方式**：支持静态模板、Base64、Puzzler 和 PAIR 多轮迭代；
+  任务执行支持暂停、继续、取消和 Worker 重启恢复，已成功用例不会重跑。
 - **Judge 与规则**：模型 Judge、规则 Judge、集成 Judge；输出 verdict、
   置信度、可信度分解与规则命中证据。
 - **结果与复核**：逐条结果表、完整证据链抽屉、低可信度/规则冲突自动复核。
-- **统计与报告**：攻击成功率、Judge 判定分布、数据集类型分布、模型对比；
-  报告统一输出为可离线打开的 HTML 文件。
+- **统计与报告**：按用例统计安全/有害/不确定结果；HTML 报告展示攻击方式、
+  种子库、模板、被测模型、Judge 配置和全部有害用例输出。
 
 ## 技术栈
 
@@ -96,6 +95,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 python -m alembic upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -104,7 +104,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -129,7 +129,7 @@ literal:sk-xxxxxxxx         直接写入数据库
 
 ## 数据集导入
 
-在"Benchmark 管理 → 导入 Benchmark"上传 CSV / JSONL，系统按表头自动识别适配器。
+在"评测资产 → 种子库"上传 CSV / JSONL，系统按表头自动识别适配器。
 
 | 数据集 | 关键字段 | 适配器 |
 |---|---|---|
@@ -201,7 +201,10 @@ dev-up.ps1               一键启动本地开发栈
 
 ## 攻击方式支持
 
-系统支持多种攻击方式，包括：
-- **静态攻击**：直接请求、角色扮演、前缀注入、拒答抑制。
-- **动态/迭代攻击**（开发中）：Base64 编码变换、Puzzler 谜题改写、PAIR 迭代优化。
-- **官方模板库**：内置 114 条人工越狱模板（包含 82 条角色扮演、20 条拒答抑制、12 条前缀注入）。
+系统支持以下攻击方式：
+
+- **静态模板**：模板 + 种子直接发送，不做额外变换。
+- **Base64**：把完整 Prompt 编码后要求目标模型先解码再回答。
+- **Puzzler**：把完整 Prompt 包装成谜题、故事或倒序文本。
+- **PAIR**：攻击模型基于种子、上一轮输出和 Judge 反馈持续改写攻击 Prompt，
+  最多迭代配置轮数，Judge 判定 `unsafe` 时提前停止。
