@@ -145,6 +145,7 @@ export type EvaluationTask = {
   task_id: number;
   name: string;
   benchmark_id?: number | null;
+  attack_method?: string | null;
   status: string;
   progress: number;
   total_cases: number;

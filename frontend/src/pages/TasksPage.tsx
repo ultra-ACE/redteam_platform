@@ -64,6 +64,13 @@ const STRATEGY_CODES: Record<string, Array<{ value: string; label: string }>> = 
   iterative: [{ value: 'pair', label: 'pair · PAIR 迭代' }],
 };
 
+const ATTACK_METHOD_META: Record<string, { label: string; color: string }> = {
+  static: { label: '静态模板', color: 'default' },
+  base64: { label: 'Base64', color: 'geekblue' },
+  puzzler: { label: 'Puzzler', color: 'gold' },
+  pair: { label: 'PAIR', color: 'purple' },
+};
+
 export function TasksPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -259,31 +266,44 @@ export function TasksPage() {
         loading={tasksQuery.isLoading}
         dataSource={tasksQuery.data?.items ?? []}
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 1240 }}
         columns={[
-          { title: 'ID', dataIndex: 'task_id', width: 80 },
-          { title: '任务名称', dataIndex: 'name' },
+          { title: 'ID', dataIndex: 'task_id', width: 70 },
+          { title: '任务名称', dataIndex: 'name', width: 200 },
+          {
+            title: '攻击方式',
+            dataIndex: 'attack_method',
+            width: 120,
+            render: (value: string | null | undefined) => {
+              const method = ATTACK_METHOD_META[value ?? 'static'] ?? {
+                label: value ?? '未知',
+                color: 'default',
+              };
+              return <Tag color={method.color}>{method.label}</Tag>;
+            },
+          },
           {
             title: '状态',
             dataIndex: 'status',
-            width: 130,
+            width: 110,
             render: (value) => <TaskStatusTag status={value} />,
           },
           {
             title: '进度',
             dataIndex: 'progress',
-            width: 180,
+            width: 160,
             render: (value) => <Progress percent={Math.round((value ?? 0) * 100)} size="small" />,
           },
-          { title: '用例数', dataIndex: 'total_cases', width: 100 },
+          { title: '用例数', dataIndex: 'total_cases', width: 90 },
           {
             title: '完成 / 失败',
-            width: 120,
+            width: 110,
             render: (_, record) => `${record.completed_cases} / ${record.failed_cases}`,
           },
-          { title: '创建时间', dataIndex: 'created_at', render: formatDateTime },
+          { title: '创建时间', dataIndex: 'created_at', width: 170, render: formatDateTime },
           {
             title: '操作',
-            width: 340,
+            width: 310,
             render: (_, record) => (
               <Space wrap>
                 <Button

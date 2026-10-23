@@ -106,6 +106,13 @@ def _apply_raw_task_config(task, raw: dict) -> None:
     task.config = config
 
 
+def _serialize_task(task) -> dict:
+    data = EvaluationTask.model_validate(task).model_dump()
+    strategy = (task.config or {}).get("attack_strategy") or {}
+    data["attack_method"] = str(strategy.get("code") or "static")
+    return data
+
+
 @router.post(
     "/evaluation-tasks",
     response_model=ApiResponse[EvaluationTask],
@@ -155,7 +162,7 @@ async def create_evaluation_task(
 
     uow.commit()
     enqueue_task(task.id)
-    return ok(EvaluationTask.model_validate(task).model_dump())
+    return ok(_serialize_task(task))
 
 
 @router.get(
@@ -174,7 +181,15 @@ async def list_evaluation_tasks(
     service = TaskService(uow)
     items = service.list_tasks(page=page, page_size=page_size, status=status)
     total = uow.evaluation_tasks.count(status=status)
-    return ok(PaginatedData[EvaluationTask](items=items, page=page, page_size=page_size, total=total).model_dump())
+    payload = [_serialize_task(item) for item in items]
+    return ok(
+        PaginatedData[EvaluationTask](
+            items=payload,
+            page=page,
+            page_size=page_size,
+            total=total,
+        ).model_dump()
+    )
 
 
 @router.get(

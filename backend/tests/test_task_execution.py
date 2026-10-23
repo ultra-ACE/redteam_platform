@@ -1051,6 +1051,7 @@ def test_create_task_route_persists_extended_config(monkeypatch) -> None:
             },
         )
         assert response.status_code == 200
+        assert response.json()["data"]["attack_method"] == "puzzler"
         task_id = response.json()["data"]["task_id"]
     finally:
         app.dependency_overrides.pop(get_uow, None)

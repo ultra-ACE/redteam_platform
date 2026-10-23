@@ -200,6 +200,7 @@ class EvaluationTask(ORMSchema):
     task_id: int = Field(validation_alias=AliasChoices("task_id", "id"), serialization_alias="task_id")
     name: str
     benchmark_id: int | None = None
+    attack_method: str | None = None
     status: TaskStatus
     progress: float = Field(default=0, ge=0, le=1)
     total_cases: int = 0
