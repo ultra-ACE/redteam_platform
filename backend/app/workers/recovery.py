@@ -61,6 +61,13 @@ def recover_incomplete_tasks() -> dict[str, int]:
                     select(TaskCase).where(TaskCase.task_id == task.id)
                 ).all()
             )
+            if not task_cases:
+                TaskExecutionService(uow).ensure_expanded(task.id)
+                task_cases = list(
+                    session.scalars(
+                        select(TaskCase).where(TaskCase.task_id == task.id)
+                    ).all()
+                )
             task_has_pending = False
             for task_case in task_cases:
                 # 失联的 running 用例回滚为 pending

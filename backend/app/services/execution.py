@@ -154,6 +154,15 @@ class TaskExecutionService(BaseService):
         self.uow.session.flush()
         return task_case_ids
 
+    def ensure_expanded(self, task_id: int) -> list[int]:
+        """Expand an active task when its cases were never persisted."""
+        task = self.uow.evaluation_tasks.get(task_id)
+        if task is None or task.status not in {"queued", "running"}:
+            return []
+        if self._task_cases(task_id):
+            return self.list_pending_case_ids(task_id)
+        return self.expand_task(task_id)
+
     def _task_cases(self, task_id: int) -> list[TaskCase]:
         stmt = select(TaskCase).where(TaskCase.task_id == task_id).order_by(TaskCase.id)
         return list(self.uow.session.scalars(stmt).all())

@@ -427,6 +427,34 @@ def test_dispatch_pending_task_finalizes_when_nothing_pending(monkeypatch) -> No
         assert task.progress == 1.0
 
 
+def test_dispatch_pending_task_expands_zero_case_task(monkeypatch) -> None:
+    """A queued/running task left at 0/0 must expand before dispatching."""
+    import app.workers.tasks as worker_tasks
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    factory = _production_session_factory(engine)
+    monkeypatch.setattr(worker_tasks, "SessionLocal", factory)
+
+    with factory() as session:
+        task_id = _build_task(session, case_count=2)
+        session.get(EvaluationTask, task_id).status = "running"
+        session.commit()
+
+    dispatched: list[int] = []
+    monkeypatch.setattr(worker_tasks.run_task_case, "delay", dispatched.append)
+
+    result = worker_tasks.dispatch_pending_task.apply(args=(task_id,))
+    pending_ids = result.get()
+
+    assert len(pending_ids) == 2
+    assert dispatched == pending_ids
+    with factory() as session:
+        task = session.get(EvaluationTask, task_id)
+        assert task.total_cases == 2
+        assert len(_case_ids(engine, task_id)) == 2
+
+
 def test_recovery_finalizes_task_without_pending_cases(monkeypatch) -> None:
     """Worker 重启恢复时，用例都已有结论的任务也要被收尾。"""
     import app.workers.recovery as recovery
@@ -456,6 +484,30 @@ def test_recovery_finalizes_task_without_pending_cases(monkeypatch) -> None:
         assert task.status == "succeeded"
         assert task.completed_cases == 2
         assert task.progress == 1.0
+
+
+def test_recovery_expands_zero_case_task(monkeypatch) -> None:
+    """Worker startup recovery must expand tasks stranded before case creation."""
+    import app.workers.recovery as recovery
+
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+    factory = _production_session_factory(engine)
+    monkeypatch.setattr(recovery, "SessionLocal", factory)
+
+    with factory() as session:
+        task_id = _build_task(session, case_count=2)
+        session.get(EvaluationTask, task_id).status = "running"
+        session.commit()
+
+    summary = recovery.recover_incomplete_tasks()
+
+    assert len(summary["pending_case_ids"]) == 2
+    with factory() as session:
+        task = session.get(EvaluationTask, task_id)
+        assert task.total_cases == 2
+        assert task.status == "running"
+        assert len(_case_ids(engine, task_id)) == 2
 
 
 def test_recovery_does_not_requeue_paused_task(monkeypatch) -> None:

@@ -92,10 +92,13 @@ def dispatch_pending_task(task_id: int) -> list[int]:
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         service = TaskExecutionService(uow)
-        pending_ids = service.list_pending_case_ids(task_id)
         task = uow.evaluation_tasks.get(task_id)
         if task is not None and task.status in {"paused", "draft"}:
             task.status = "queued"
+        # A task may be persisted as queued/running before expansion finishes.
+        # Re-expand it here so resume/recovery cannot strand it at 0/0 forever.
+        service.ensure_expanded(task_id)
+        pending_ids = service.list_pending_case_ids(task_id)
         if not pending_ids:
             # 没有待跑用例（暂停期间剩的用例已经跑完，或本来就不剩），
             # 不会再有任何 run_task_case 触发进度刷新，必须在这里收尾一次，
