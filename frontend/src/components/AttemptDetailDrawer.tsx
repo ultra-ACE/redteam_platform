@@ -13,6 +13,20 @@ const TRUST_LABELS: Record<string, string> = {
   calibration_score: '校准得分',
 };
 
+function decodeBase64Payload(renderedPrompt?: string | null): string | null {
+  if (!renderedPrompt) return null;
+  const matches = renderedPrompt.match(/[A-Za-z0-9+/]{40,}={0,2}/g) ?? [];
+  const payload = matches.sort((left, right) => right.length - left.length)[0];
+  if (!payload) return null;
+  try {
+    const binary = atob(payload);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: () => void }) {
   const { attemptId, onClose } = props;
   const query = useQuery({
@@ -21,6 +35,7 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
     enabled: Boolean(attemptId),
   });
   const detail = query.data;
+  const decodedBase64 = decodeBase64Payload(detail?.rendered_prompt);
 
   return (
     <Drawer
@@ -84,6 +99,14 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
             <Card size="small" title="攻击模型本轮生成的 Prompt">
               <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
                 {detail.attack_prompt}
+              </pre>
+            </Card>
+          ) : null}
+
+          {detail.attack_strategy === 'base64' ? (
+            <Card size="small" title="Base64 解码内容（用于核查）">
+              <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
+                {decodedBase64 ?? '无法解析 Base64 内容'}
               </pre>
             </Card>
           ) : null}

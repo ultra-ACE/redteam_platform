@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -760,8 +761,8 @@ def _run_single_case_prompt(session, version_id: int, seed_id: int, model_id: in
     return attempt.input_snapshot["prompt"]
 
 
-def test_puzzler_generates_transformed_prompt_and_respects_disabled() -> None:
-    """T6：Puzzler 会变换完整 Prompt，停用策略时保持原样。"""
+def test_base64_and_puzzler_generate_different_prompts() -> None:
+    """T6：同一份种子在 Base64 和 Puzzler 下生成不同的 Prompt。"""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
@@ -780,6 +781,13 @@ def test_puzzler_generates_transformed_prompt_and_respects_disabled() -> None:
             model_id,
             {"type": "static", "code": "static", "config": {}, "enabled": True},
         )
+        base64_prompt = _run_single_case_prompt(
+            session,
+            version_id,
+            seed_ids[0],
+            model_id,
+            {"type": "transform", "code": "base64", "config": {}, "enabled": True},
+        )
         puzzler_prompt = _run_single_case_prompt(
             session,
             version_id,
@@ -792,13 +800,16 @@ def test_puzzler_generates_transformed_prompt_and_respects_disabled() -> None:
             version_id,
             seed_ids[0],
             model_id,
-            {"type": "transform", "code": "puzzler", "config": {}, "enabled": False},
+            {"type": "transform", "code": "base64", "config": {}, "enabled": False},
         )
 
         assert static_prompt == seed_prompt
         assert disabled_prompt == seed_prompt
+        encoded = base64.b64encode(seed_prompt.encode("utf-8")).decode("ascii")
+        assert encoded in base64_prompt
+        assert base64_prompt != seed_prompt
         assert seed_prompt in puzzler_prompt
-        assert puzzler_prompt != seed_prompt
+        assert len({static_prompt, base64_prompt, puzzler_prompt}) == 3
 
 
 def _build_pair_case(session, *, seed_prompt: str, judge_params: dict, max_rounds: int):
