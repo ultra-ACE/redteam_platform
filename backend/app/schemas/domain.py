@@ -253,7 +253,6 @@ class EvaluationResult(ORMSchema):
 
 class JudgeTrustBreakdown(ORMSchema):
     rule_consistency: float = Field(ge=0, le=1)
-    ensemble_agreement: float = Field(ge=0, le=1)
     evidence_completeness: float = Field(ge=0, le=1)
     calibration_score: float = Field(ge=0, le=1)
 
