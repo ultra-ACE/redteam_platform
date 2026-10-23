@@ -116,7 +116,7 @@ export type EvaluationTaskExecutionConfig = {
 };
 
 export type AttackStrategyType = 'static' | 'transform' | 'iterative';
-export type AttackStrategyCode = 'static' | 'base64' | 'puzzler' | 'pair';
+export type AttackStrategyCode = 'static' | 'puzzler' | 'pair';
 
 export type EvaluationTaskAttackStrategy = {
   type: AttackStrategyType;

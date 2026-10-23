@@ -3507,7 +3507,6 @@ components:
       enum:
       - model
       - rule
-      - ensemble
       title: JudgeType
     JudgeVerdict:
       type: string

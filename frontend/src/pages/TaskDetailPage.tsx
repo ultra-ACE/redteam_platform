@@ -70,7 +70,7 @@ function groupResultsByCase(items: EvaluationResult[]): ResultGroup[] {
         (left, right) =>
           left.attempt_id - right.attempt_id,
       );
-      // 只有 PAIR 这类 iterative 策略才存在“轮次”。static / base64 / puzzler
+      // 只有 PAIR 这类 iterative 策略才存在“轮次”。static / puzzler
       // 每轮都是一次性执行，重复调用是失败重试，不能显示成“第 2 轮”。
       const isIterative = group.attack_strategy === 'pair';
       let roundAttempts: EvaluationResult[];

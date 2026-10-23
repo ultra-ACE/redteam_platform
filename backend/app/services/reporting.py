@@ -193,7 +193,6 @@ class ReportService(BaseService):
         strategy_code = str(strategy.get("code") or "static")
         method_labels = {
             "static": "静态模板",
-            "base64": "Base64 编码变换",
             "puzzler": "Puzzler 谜题改写",
             "pair": "PAIR 多轮迭代",
         }

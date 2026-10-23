@@ -1,5 +1,4 @@
 import asyncio
-import base64
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -685,8 +684,8 @@ def _run_single_case_prompt(session, version_id: int, seed_id: int, model_id: in
     return attempt.input_snapshot["prompt"]
 
 
-def test_base64_and_puzzler_generate_different_prompts() -> None:
-    """T6：同一份种子在不同策略下生成的 prompt 不同。"""
+def test_puzzler_generates_transformed_prompt_and_respects_disabled() -> None:
+    """T6：Puzzler 会变换完整 Prompt，停用策略时保持原样。"""
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
@@ -705,13 +704,6 @@ def test_base64_and_puzzler_generate_different_prompts() -> None:
             model_id,
             {"type": "static", "code": "static", "config": {}, "enabled": True},
         )
-        base64_prompt = _run_single_case_prompt(
-            session,
-            version_id,
-            seed_ids[0],
-            model_id,
-            {"type": "transform", "code": "base64", "config": {}, "enabled": True},
-        )
         puzzler_prompt = _run_single_case_prompt(
             session,
             version_id,
@@ -724,16 +716,13 @@ def test_base64_and_puzzler_generate_different_prompts() -> None:
             version_id,
             seed_ids[0],
             model_id,
-            {"type": "transform", "code": "base64", "config": {}, "enabled": False},
+            {"type": "transform", "code": "puzzler", "config": {}, "enabled": False},
         )
 
         assert static_prompt == seed_prompt
         assert disabled_prompt == seed_prompt
-        encoded = base64.b64encode(seed_prompt.encode("utf-8")).decode("ascii")
-        assert encoded in base64_prompt
-        assert base64_prompt != seed_prompt
         assert seed_prompt in puzzler_prompt
-        assert len({static_prompt, base64_prompt, puzzler_prompt}) == 3
+        assert puzzler_prompt != seed_prompt
 
 
 def _build_pair_case(session, *, seed_prompt: str, judge_params: dict, max_rounds: int):
@@ -891,7 +880,7 @@ def test_create_route_merges_seed_strategy_and_attacker_config() -> None:
             "attacker_model_id": "3",
             "attack_strategy": {
                 "type": "transform",
-                "code": "base64",
+                "code": "puzzler",
                 "config": {"wrapper": "prefix {payload}"},
                 "enabled": False,
             },
@@ -903,8 +892,8 @@ def test_create_route_merges_seed_strategy_and_attacker_config() -> None:
     assert task.config["attacker_model_id"] == 3
     assert task.config["attack_strategy"] == {
         "type": "transform",
-        "code": "base64",
-        "config": {"wrapper": "prefix {payload}"},
+        "code": "puzzler",
+        "config": {"wrapper": "prefix {payload}", "style": "riddle"},
         "enabled": False,
     }
 
@@ -968,7 +957,7 @@ def test_create_task_route_persists_extended_config(monkeypatch) -> None:
                 "attacker_model_id": attacker_model_id,
                 "attack_strategy": {
                     "type": "transform",
-                    "code": "base64",
+                    "code": "puzzler",
                     "config": {},
                     "enabled": True,
                 },
@@ -987,8 +976,8 @@ def test_create_task_route_persists_extended_config(monkeypatch) -> None:
         assert task.config["attacker_model_id"] == attacker_model_id
         assert task.config["attack_strategy"] == {
             "type": "transform",
-            "code": "base64",
-            "config": {},
+            "code": "puzzler",
+            "config": {"style": "riddle"},
             "enabled": True,
         }
         attacker_bindings = list(
@@ -1180,15 +1169,14 @@ def test_template_rendering_happens_before_strategy_transform() -> None:
         "前缀：{prompt}",
         case_config={
             "strategy_type": "transform",
-            "strategy_code": "base64",
+            "strategy_code": "puzzler",
             "strategy_config": {},
             "strategy_enabled": True,
         },
     )
     plain = "前缀：种子问题"
-    encoded = base64.b64encode(plain.encode("utf-8")).decode("ascii")
-    assert encoded in rendered
-    assert base64.b64decode(encoded).decode("utf-8") == plain
+    assert plain in rendered
+    assert rendered != plain
 
 
 def test_iterative_template_rendering_supports_same_placeholders() -> None:

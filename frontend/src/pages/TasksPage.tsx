@@ -51,16 +51,13 @@ import { formatDateTime } from '../utils/format';
 
 const STRATEGY_TYPES = [
   { value: 'static', label: '静态模板（不变换）' },
-  { value: 'transform', label: '纯变换（Base64 / Puzzler）' },
+  { value: 'transform', label: '纯变换（Puzzler）' },
   { value: 'iterative', label: 'PAIR 迭代（多轮）' },
 ];
 
 const STRATEGY_CODES: Record<string, Array<{ value: string; label: string }>> = {
   static: [{ value: 'static', label: 'static · 原样发送' }],
-  transform: [
-    { value: 'base64', label: 'base64 · Base64 编码' },
-    { value: 'puzzler', label: 'puzzler · Puzzler 谜题' },
-  ],
+  transform: [{ value: 'puzzler', label: 'puzzler · Puzzler 谜题' }],
   iterative: [{ value: 'pair', label: 'pair · PAIR 迭代' }],
 };
 
@@ -560,7 +557,7 @@ export function TasksPage() {
                   options={STRATEGY_TYPES}
                   onChange={(value) => {
                     const defaultCode =
-                      value === 'transform' ? 'base64' : value === 'iterative' ? 'pair' : 'static';
+                      value === 'transform' ? 'puzzler' : value === 'iterative' ? 'pair' : 'static';
                     form.setFieldValue('strategy_code', defaultCode);
                   }}
                 />
@@ -591,7 +588,7 @@ export function TasksPage() {
             name="strategy_enabled"
             label="启用策略变换"
             valuePropName="checked"
-            extra="关闭后即使选择了 Base64 / Puzzler 也按原始 Prompt 发送"
+            extra="关闭后即使选择了 Puzzler 也按原始 Prompt 发送"
           >
             <Switch checkedChildren="启用" unCheckedChildren="停用" />
           </Form.Item>

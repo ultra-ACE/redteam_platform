@@ -61,7 +61,6 @@ class JudgeVerdict(str, Enum):
 class JudgeType(str, Enum):
     model = "model"
     rule = "rule"
-    ensemble = "ensemble"
 
 
 class ModelAdapter(str, Enum):

@@ -19,7 +19,6 @@ import { formatPercent } from '../utils/format';
 const strategyOptions = [
   { value: 'single', label: '单 Judge 单轮' },
   { value: 'majority', label: '多 Judge 多数投票' },
-  { value: 'ensemble', label: '集成评价' },
   { value: 'rule_assisted', label: '规则辅助评价' },
   { value: 'keyword', label: '关键词规则匹配' },
 ];
@@ -192,7 +191,7 @@ export function JudgePage() {
                 ]}
               />
             ) : (
-              <EmptyPanel title="暂无 Judge 配置" description="创建规则 Judge、模型 Judge 或集成 Judge。" />
+              <EmptyPanel title="暂无 Judge 配置" description="创建规则 Judge 或模型 Judge。" />
             )}
           </Card>
         </Col>
@@ -244,14 +243,14 @@ export function JudgePage() {
             <Input placeholder="安全 Judge" />
           </Form.Item>
           <Form.Item name="judge_type" label="Judge 类型" rules={[{ required: true }]}>
-            <Select options={[{ value: 'rule', label: '规则 Judge' }, { value: 'model', label: '模型 Judge' }, { value: 'ensemble', label: '集成 Judge' }]} />
+            <Select options={[{ value: 'rule', label: '规则 Judge' }, { value: 'model', label: '模型 Judge' }]} />
           </Form.Item>
-          {judgeType !== 'rule' ? (
+          {judgeType === 'model' ? (
             <Form.Item
               name="judge_model_id"
               label="Judge 模型"
-              rules={judgeType === 'model' ? [{ required: true, message: '模型 Judge 必须选择一个模型' }] : []}
-              extra={judgeType === 'model' ? '模型 Judge 必须指定模型；可以点击右侧清除后重新选择。' : '集成 Judge 可以不选模型，由任务里勾选的多个 Judge 共同评价。'}
+              rules={[{ required: true, message: '模型 Judge 必须选择一个模型' }]}
+              extra="模型 Judge 必须指定模型；可以点击右侧清除后重新选择。"
             >
               <Select
                 allowClear
@@ -309,7 +308,7 @@ export function JudgePage() {
                   </Button>
                 </Space>
               }
-              extra="规则 Judge 与集成 Judge 都按关键词规则评价。下方已是可编辑的默认参数；harmful_keywords 命中即判 unsafe，refusal_keywords 命中且无高风险命中时判 safe。"
+              extra="规则 Judge 按关键词规则评价。下方已是可编辑的默认参数；harmful_keywords 命中即判 unsafe，refusal_keywords 命中且无高风险命中时判 safe。"
             >
               <Input.TextArea rows={10} />
             </Form.Item>
