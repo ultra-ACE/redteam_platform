@@ -378,7 +378,7 @@ export function TasksPage() {
           initialValues={{
             model_ids: [],
             repeat: 1,
-            timeout_seconds: 120,
+            timeout_seconds: 600,
             concurrency: 4,
             seed_benchmark_id: undefined,
             seed_test_case_ids: [],
@@ -421,7 +421,8 @@ export function TasksPage() {
                 retry: { max_attempts: 1, backoff_seconds: 3 },
                 concurrency: values.concurrency,
               },
-              max_rounds: values.max_rounds ?? 3,
+              max_rounds:
+                values.strategy_type === 'iterative' ? (values.max_rounds ?? 3) : undefined,
               attacker_model_id:
                 values.strategy_type === 'iterative' ? values.attacker_model_id : undefined,
               attack_strategy: {
@@ -656,7 +657,12 @@ export function TasksPage() {
             <Form.Item name="repeat" label="重复次数" style={{ flex: 1 }}>
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="timeout_seconds" label="单次超时（秒）" style={{ flex: 1 }}>
+            <Form.Item
+              name="timeout_seconds"
+              label="单次超时（秒）"
+              extra="本地 7B/14B 模型建议 300–600"
+              style={{ flex: 1 }}
+            >
               <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="concurrency" label="并发数" style={{ flex: 1 }}>

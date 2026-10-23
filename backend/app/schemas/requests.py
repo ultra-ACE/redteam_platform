@@ -93,7 +93,7 @@ class RetryConfig(BaseModel):
 
 class ExecutionConfig(BaseModel):
     repeat: int = Field(default=1, ge=1)
-    timeout_seconds: int = Field(default=120, ge=1)
+    timeout_seconds: int = Field(default=600, ge=1)
     retry: RetryConfig = Field(default_factory=RetryConfig)
     concurrency: int = Field(default=4, ge=1)
 

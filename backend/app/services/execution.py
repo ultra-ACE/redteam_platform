@@ -235,6 +235,17 @@ class TaskExecutionService(BaseService):
             return default
         return parsed if parsed > 0 else default
 
+    @staticmethod
+    def _execution_timeout_seconds(task: EvaluationTask) -> int | None:
+        """任务里配置的“单次超时”此前没有传给适配器，导致总是用全局 120s。"""
+        config = dict(task.config or {})
+        execution = config.get("execution") or {}
+        try:
+            parsed = int(execution.get("timeout_seconds"))
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed > 0 else None
+
     def _fail_task(self, task: EvaluationTask, message: str) -> None:
         task.status = "failed"
         task.error_message = message
@@ -333,7 +344,7 @@ class TaskExecutionService(BaseService):
         self.uow.commit()
         self._log_stage(task_case.id, "db_setup", case_started, attempt_id=attempt.id)
 
-        adapter = build_adapter(model)
+        adapter = build_adapter(model, timeout_seconds=self._execution_timeout_seconds(task))
         request = GenerateRequest(
             prompt=prompt,
             system_prompt=test_case.system_prompt,
@@ -463,8 +474,9 @@ class TaskExecutionService(BaseService):
             attacker_system_prompt = strategy["strategy_config"]["system_prompt"]
 
         target_params = target_binding.model_params or {}
-        target_adapter = build_adapter(target_model)
-        attacker_adapter = build_adapter(attacker_model)
+        timeout_seconds = self._execution_timeout_seconds(task)
+        target_adapter = build_adapter(target_model, timeout_seconds=timeout_seconds)
+        attacker_adapter = build_adapter(attacker_model, timeout_seconds=timeout_seconds)
 
         attempts = self.uow.task_attempts.list(
             page=1,
@@ -925,6 +937,36 @@ class TaskExecutionService(BaseService):
         self.uow.session.flush()
         self.uow.commit()
         return attempt.id
+
+    def fail_task_case(self, task_case_id: int, code: str, message: str) -> None:
+        """Worker 层兜底：任何未捕获异常都不能让用例永久停在 running。"""
+        task_case = self.uow.task_cases.get(task_case_id)
+        if task_case is None:
+            return
+        task = self.uow.evaluation_tasks.get(task_case.task_id)
+        if task is None:
+            return
+
+        now = _now()
+        task_case.status = "failed"
+        task_case.celery_task_id = None
+        task_case.last_heartbeat_at = now
+        running_attempts = self.uow.task_attempts.list(
+            page=1,
+            page_size=100,
+            task_case_id=task_case_id,
+            status="running",
+        )
+        for attempt in running_attempts:
+            attempt.status = "failed"
+            attempt.error_code = code
+            attempt.error_message = message[:2000]
+            attempt.finished_at = now
+            attempt.last_heartbeat_at = now
+
+        self._refresh_task_progress(task)
+        self.uow.session.flush()
+        self.uow.commit()
 
     @staticmethod
     def _log_stage(task_case_id: int, stage: str, started: float, **extra: Any) -> None:

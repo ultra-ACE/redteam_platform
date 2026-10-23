@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeftOutlined,
@@ -21,12 +21,83 @@ import {
   resumeTask,
   retryFailedTask,
 } from '../api';
-import type { TaskStatusData } from '../types/api';
+import type { EvaluationResult, TaskStatusData } from '../types/api';
 import { AttemptDetailDrawer } from '../components/AttemptDetailDrawer';
 import { JudgeVerdictTag, PageHeader, TaskStatusTag } from '../components/ui';
 import { formatDateTime, formatPercent } from '../utils/format';
 
 const TERMINAL_TASK_STATUSES = new Set(['succeeded', 'partially_failed', 'failed', 'cancelled']);
+
+type ResultGroup = {
+  task_case_id: number;
+  external_id?: string | null;
+  attack_template_id?: number | null;
+  attack_strategy?: string | null;
+  model_id: number;
+  dataset_type?: string | null;
+  sample_kind?: string | null;
+  attempts: EvaluationResult[];
+  roundAttempts: EvaluationResult[];
+  isIterative: boolean;
+};
+
+function groupResultsByCase(items: EvaluationResult[]): ResultGroup[] {
+  const groups = new Map<number, ResultGroup>();
+  for (const item of items) {
+    const key = item.task_case_id ?? item.attempt_id;
+    const current = groups.get(key);
+    if (current) {
+      current.attempts.push(item);
+      continue;
+    }
+    groups.set(key, {
+      task_case_id: key,
+      external_id: item.external_id,
+      attack_template_id: item.attack_template_id,
+      attack_strategy: item.attack_strategy,
+      model_id: item.model_id,
+      dataset_type: item.dataset_type,
+      sample_kind: item.sample_kind,
+      attempts: [item],
+      roundAttempts: [],
+      isIterative: item.attack_strategy === 'pair',
+    });
+  }
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const attempts = [...group.attempts].sort(
+        (left, right) =>
+          left.attempt_id - right.attempt_id,
+      );
+      // 只有 PAIR 这类 iterative 策略才存在“轮次”。static / base64 / puzzler
+      // 每轮都是一次性执行，重复调用是失败重试，不能显示成“第 2 轮”。
+      const isIterative = group.attack_strategy === 'pair';
+      let roundAttempts: EvaluationResult[];
+      if (isIterative) {
+        const latestByRound = new Map<number, EvaluationResult>();
+        for (const attempt of attempts) {
+          latestByRound.set(attempt.round_no ?? attempt.attempt_no, attempt);
+        }
+        roundAttempts = Array.from(latestByRound.entries())
+          .sort(([left], [right]) => left - right)
+          .map(([, attempt]) => attempt);
+      } else {
+        roundAttempts = attempts.length ? [attempts[attempts.length - 1]] : [];
+      }
+      return {
+        ...group,
+        attempts,
+        roundAttempts,
+        isIterative,
+      };
+    })
+    .sort((left, right) => {
+      const leftId = left.roundAttempts[left.roundAttempts.length - 1]?.attempt_id ?? 0;
+      const rightId = right.roundAttempts[right.roundAttempts.length - 1]?.attempt_id ?? 0;
+      return rightId - leftId;
+    });
+}
 
 export function TaskDetailPage() {
   const { taskId } = useParams();
@@ -61,8 +132,27 @@ export function TaskDetailPage() {
   };
 
   const statusQuery = useQuery({ queryKey: ['task-status', id], queryFn: () => getTaskStatus(id), enabled: Boolean(id) });
-  const resultsQuery = useQuery({ queryKey: ['task-results', id], queryFn: () => getTaskResults(id, { page_size: 100 }), enabled: Boolean(id) });
+  const resultsQuery = useQuery({
+    queryKey: ['task-results', id],
+    queryFn: async () => {
+      const items: EvaluationResult[] = [];
+      let page = 1;
+      let hasNext = true;
+      while (hasNext && page <= 50) {
+        const data = await getTaskResults(id, { page, page_size: 200 });
+        items.push(...data.items);
+        hasNext = data.has_next;
+        page += 1;
+      }
+      return items;
+    },
+    enabled: Boolean(id),
+  });
   const statsQuery = useQuery({ queryKey: ['task-statistics', id], queryFn: () => getTaskStatistics(id), enabled: Boolean(id), retry: false });
+  const resultGroups = useMemo(
+    () => groupResultsByCase(resultsQuery.data ?? []),
+    [resultsQuery.data],
+  );
 
   const retryMutation = useMutation({
     mutationFn: () => retryFailedTask(id),
@@ -286,25 +376,84 @@ export function TaskDetailPage() {
 
       <Card
         className="section-card"
-        title="逐条评测结果"
+        title="评测结果"
         extra={
           <Space>
-            <Tag color="blue">最多展示 100 条</Tag>
-            <Tag color="purple">点击任意行查看完整证据链</Tag>
+            <Tag color="blue">按用例聚合</Tag>
+            <Tag color="purple">PAIR 按轮次展开；失败重试按次数展开</Tag>
           </Space>
         }
       >
-        <Table
-          rowKey="attempt_id"
+        <Table<ResultGroup>
+          rowKey={(record) => String(record.task_case_id)}
           loading={resultsQuery.isLoading}
-          dataSource={resultsQuery.data?.items ?? []}
+          dataSource={resultGroups}
           pagination={{ pageSize: 10 }}
           onRow={(record) => ({
-            onClick: () => openAttemptDetail(record.attempt_id),
-            style: { cursor: 'pointer' },
+            onClick: () => {
+              if (record.attempts.length === 1) {
+                openAttemptDetail(record.attempts[0].attempt_id);
+              }
+            },
+            style: { cursor: record.attempts.length === 1 ? 'pointer' : 'default' },
           })}
+          expandable={{
+            rowExpandable: (record) => record.attempts.length > 1,
+            expandedRowRender: (record) => (
+              <Table<EvaluationResult>
+                rowKey="attempt_id"
+                size="small"
+                pagination={false}
+                dataSource={record.attempts}
+                onRow={(attempt) => ({
+                  onClick: () => openAttemptDetail(attempt.attempt_id),
+                  style: { cursor: 'pointer' },
+                })}
+                columns={[
+                  {
+                    title: '轮次 / 尝试',
+                    width: 130,
+                    render: (_, attempt) => (
+                      <Tag color={attempt.round_no ? 'purple' : 'default'}>
+                        {attempt.round_no
+                          ? `第 ${attempt.round_no} 轮`
+                          : `第 ${attempt.attempt_no} 次尝试`}
+                      </Tag>
+                    ),
+                  },
+                  { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
+                  {
+                    title: '本轮 Prompt',
+                    dataIndex: 'prompt_excerpt',
+                    ellipsis: { showTitle: true },
+                    render: (value: string | null | undefined) => value || '-',
+                  },
+                  {
+                    title: '模型输出',
+                    dataIndex: 'model_output_excerpt',
+                    width: 240,
+                    ellipsis: { showTitle: true },
+                    render: (value: string | null | undefined) => value || '-',
+                  },
+                  {
+                    title: 'Judge',
+                    width: 110,
+                    render: (_, attempt) => (
+                      <JudgeVerdictTag verdict={attempt.judge?.verdict} />
+                    ),
+                  },
+                  {
+                    title: '规则命中',
+                    width: 90,
+                    render: (_, attempt) =>
+                      attempt.rule_validation?.hit_count ?? 0,
+                  },
+                ]}
+              />
+            ),
+          }}
           columns={[
-            { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
+            { title: '用例 ID', dataIndex: 'task_case_id', width: 90 },
             {
               title: '来源编号',
               dataIndex: 'external_id',
@@ -312,25 +461,61 @@ export function TaskDetailPage() {
               ellipsis: { showTitle: true },
             },
             {
-              title: '测试 Prompt',
-              dataIndex: 'prompt_excerpt',
-              ellipsis: { showTitle: true },
+              title: '轮次 / 尝试',
+              width: 150,
+              render: (_, record) => (
+                <Space size={4} wrap>
+                  {record.isIterative ? (
+                    <Tag color={record.roundAttempts.length > 1 ? 'purple' : 'default'}>
+                      {record.roundAttempts.length} 轮
+                    </Tag>
+                  ) : (
+                    <Tag>单轮</Tag>
+                  )}
+                  {record.attempts.length > 1 ? (
+                    <Tag>{record.attempts.length} 次尝试</Tag>
+                  ) : null}
+                </Space>
+              ),
+            },
+            {
+              title: '模板',
+              dataIndex: 'attack_template_id',
+              width: 90,
+              render: (value: number | null | undefined) =>
+                value ? `#${value}` : '-',
+            },
+            {
+              title: '攻击方式',
+              dataIndex: 'attack_strategy',
+              width: 110,
               render: (value: string | null | undefined) => value || '-',
             },
             { title: '模型 ID', dataIndex: 'model_id', width: 90 },
-            { title: '数据集类型', dataIndex: 'dataset_type', width: 120, render: (value) => value || '-' },
-            { title: '样本类型', dataIndex: 'sample_kind', width: 110, render: (value) => value || '-' },
             {
-              title: 'Judge',
+              title: '最终判定',
               width: 110,
-              render: (_, record) => <JudgeVerdictTag verdict={record.judge?.verdict} />,
+              render: (_, record) => (
+                <JudgeVerdictTag
+                  verdict={
+                    record.roundAttempts[record.roundAttempts.length - 1]?.judge?.verdict
+                  }
+                />
+              ),
             },
             {
               title: '规则命中',
               width: 110,
-              render: (_, record) => record.rule_validation?.hit_count ?? 0,
+              render: (_, record) =>
+                record.roundAttempts[record.roundAttempts.length - 1]?.rule_validation
+                  ?.hit_count ?? 0,
             },
-            { title: '复核状态', dataIndex: 'manual_review_status', width: 120 },
+            {
+              title: '状态',
+              width: 110,
+              render: (_, record) =>
+                record.roundAttempts[record.roundAttempts.length - 1]?.status ?? '-',
+            },
           ]}
         />
       </Card>

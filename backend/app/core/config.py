@@ -45,7 +45,7 @@ class Settings:
         default_factory=lambda: _env_bool("CELERY_TASK_EAGER_PROPAGATES", True)
     )
     default_model_timeout_seconds: int = field(
-        default_factory=lambda: int(os.getenv("DEFAULT_MODEL_TIMEOUT_SECONDS", "120"))
+        default_factory=lambda: int(os.getenv("DEFAULT_MODEL_TIMEOUT_SECONDS", "600"))
     )
     max_upload_bytes: int = field(
         default_factory=lambda: int(os.getenv("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))

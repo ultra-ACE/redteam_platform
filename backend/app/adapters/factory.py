@@ -23,13 +23,25 @@ def resolve_secret_ref(secret_ref: str | None) -> str | None:
     return text
 
 
-def build_adapter(model: ModelRegistry) -> ModelAdapter:
+def _resolve_timeout(model: ModelRegistry, override: int | None) -> int:
+    params = model.default_params or {}
+    for value in (override, params.get("timeout_seconds")):
+        try:
+            parsed = int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            return parsed
+    return settings.default_model_timeout_seconds
+
+
+def build_adapter(model: ModelRegistry, *, timeout_seconds: int | None = None) -> ModelAdapter:
     adapter_type = model.adapter_type
     config = AdapterConfig(
         base_url=model.base_url or "",
         model_name=model.model_name,
         api_key=resolve_secret_ref(model.secret_ref),
-        timeout_seconds=settings.default_model_timeout_seconds,
+        timeout_seconds=_resolve_timeout(model, timeout_seconds),
         extra=model.default_params or {},
     )
 

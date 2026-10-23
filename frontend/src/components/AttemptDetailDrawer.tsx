@@ -14,6 +14,20 @@ const TRUST_LABELS: Record<string, string> = {
   calibration_score: '校准得分',
 };
 
+function decodeBase64Payload(renderedPrompt?: string | null): string | null {
+  if (!renderedPrompt) return null;
+  const matches = renderedPrompt.match(/[A-Za-z0-9+/]{40,}={0,2}/g) ?? [];
+  const payload = matches.sort((left, right) => right.length - left.length)[0];
+  if (!payload) return null;
+  try {
+    const binary = atob(payload);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: () => void }) {
   const { attemptId, onClose } = props;
   const query = useQuery({
@@ -22,10 +36,15 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
     enabled: Boolean(attemptId),
   });
   const detail = query.data;
+  const decodedBase64 = decodeBase64Payload(detail?.rendered_prompt);
 
   return (
     <Drawer
-      title={`尝试详情 · #${attemptId ?? ''}`}
+      title={
+        detail?.round_no
+          ? `尝试详情 · #${attemptId ?? ''} · 第 ${detail.round_no} 轮`
+          : `尝试详情 · #${attemptId ?? ''}`
+      }
       placement="right"
       width={880}
       open={Boolean(attemptId)}
@@ -60,6 +79,15 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
             <Descriptions.Item label="攻击模板">
               {detail.attack_template_name ?? (detail.attack_template_id ? `模板 #${detail.attack_template_id}` : '未使用')}
             </Descriptions.Item>
+            <Descriptions.Item label="轮次 / 尝试">
+              {detail.round_no ? (
+                <Tag color="purple">第 {detail.round_no} 轮</Tag>
+              ) : (
+                <Tag>第 {detail.attempt_no} 次尝试（非迭代策略）</Tag>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="攻击方式">{detail.attack_strategy ?? '-'}</Descriptions.Item>
+            <Descriptions.Item label="尝试序号">#{detail.attempt_no}</Descriptions.Item>
             <Descriptions.Item label="执行状态"><Tag>{detail.status}</Tag></Descriptions.Item>
             <Descriptions.Item label="耗时">
               {detail.latency_ms === null || detail.latency_ms === undefined ? '-' : `${detail.latency_ms} ms`}
@@ -68,8 +96,30 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
             <Descriptions.Item label="结束时间">{formatDateTime(detail.finished_at)}</Descriptions.Item>
           </Descriptions>
 
-          <Card size="small" title="测试 Prompt">
+          <Card size="small" title="原始种子 / 行为">
             <pre className="code-block">{detail.prompt ?? '-'}</pre>
+          </Card>
+
+          {detail.attack_prompt ? (
+            <Card size="small" title="攻击模型本轮生成的 Prompt">
+              <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
+                {detail.attack_prompt}
+              </pre>
+            </Card>
+          ) : null}
+
+          {detail.attack_strategy === 'base64' ? (
+            <Card size="small" title="Base64 解码内容（用于核查）">
+              <pre className="code-block" style={{ maxHeight: 320, overflow: 'auto' }}>
+                {decodedBase64 ?? '无法解析 Base64 内容'}
+              </pre>
+            </Card>
+          ) : null}
+
+          <Card size="small" title="实际发送给模型的 Prompt">
+            <pre className="code-block">
+  {(detail as any).input_snapshot?.prompt ?? (detail as any).rendered_prompt ?? detail.prompt ?? '-'}
+            </pre>
           </Card>
 
           <Card size="small" title="模型输出">
