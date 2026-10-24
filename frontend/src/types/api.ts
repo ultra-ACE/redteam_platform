@@ -193,7 +193,7 @@ export type EvaluationResult = {
   status: string;
   prompt_excerpt?: string | null;
   model_output_excerpt?: string | null;
-  judge?: { verdict: string; confidence: number; trust_score: number } | null;
+  judge?: { verdict: string; confidence: number; trust_score?: number | null } | null;
   rule_validation?: { hit_count: number; highest_severity?: string | null } | null;
   manual_review_status: string;
 };

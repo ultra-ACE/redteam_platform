@@ -10,7 +10,7 @@ const { Text } = Typography;
 const TRUST_LABELS: Record<string, string> = {
   rule_consistency: '规则一致性',
   evidence_completeness: '证据完整度',
-  calibration_score: '校准得分',
+  calibration_score: '多 Judge 一致性 / 置信度',
 };
 
 function decodeBase64Payload(renderedPrompt?: string | null): string | null {

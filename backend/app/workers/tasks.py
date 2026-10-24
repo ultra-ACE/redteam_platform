@@ -180,6 +180,7 @@ def validate_rules(attempt_id: int) -> None:
     with SessionLocal() as session:
         uow = UnitOfWork(session)
         RuleValidationService(uow).validate_attempt(attempt_id)
+        JudgeEvaluationService(uow).recalculate_trust_scores(attempt_id)
         ManualReviewService(uow).ensure_for_attempt(attempt_id)
         rule_elapsed = _elapsed_ms(started)
         attempt = uow.task_attempts.get(attempt_id)

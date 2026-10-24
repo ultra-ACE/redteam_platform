@@ -3454,15 +3454,16 @@ components:
           minimum: 0.0
           title: Confidence
         trust_score:
-          type: number
-          maximum: 1.0
-          minimum: 0.0
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
           title: Trust Score
       type: object
       required:
       - verdict
       - confidence
-      - trust_score
       title: JudgeSummary
     JudgeTrustSummary:
       properties:

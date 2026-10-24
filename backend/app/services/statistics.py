@@ -24,7 +24,9 @@ class StatisticsService(BaseService):
             if item.judge is None or item.judge.verdict == "uncertain"
         )
         judge_trust_scores = [
-            item.judge.trust_score for item in case_items if item.judge is not None
+            item.judge.trust_score
+            for item in case_items
+            if item.judge is not None and item.judge.trust_score is not None
         ]
         judge_confidence_scores = [
             item.judge.confidence for item in case_items if item.judge is not None

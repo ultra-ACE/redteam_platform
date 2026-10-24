@@ -604,6 +604,7 @@ class TaskExecutionService(BaseService):
 
             rule_started = time.perf_counter()
             RuleValidationService(self.uow).validate_attempt(attempt.id)
+            JudgeEvaluationService(self.uow).recalculate_trust_scores(attempt.id)
             ManualReviewService(self.uow).ensure_for_attempt(attempt.id)
             self._log_stage(task_case.id, "rule", rule_started, round_no=round_no)
 

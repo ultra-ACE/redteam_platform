@@ -95,7 +95,7 @@ class EvaluationResultService(BaseService):
             judge_summary = JudgeSummary(
                 verdict=judge_result.verdict or "uncertain",
                 confidence=judge_result.confidence or 0.0,
-                trust_score=judge_result.trust_score or 0.0,
+                trust_score=judge_result.trust_score,
             )
 
         rendered_prompt = self._rendered_prompt(attempt, test_case)

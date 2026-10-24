@@ -169,7 +169,7 @@ class JudgeProfile(ORMSchema):
 class JudgeSummary(ORMSchema):
     verdict: JudgeVerdict
     confidence: float = Field(ge=0, le=1)
-    trust_score: float = Field(ge=0, le=1)
+    trust_score: float | None = Field(default=None, ge=0, le=1)
 
 
 class RuleValidationSummary(ORMSchema):
