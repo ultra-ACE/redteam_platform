@@ -227,6 +227,7 @@ export function TaskDetailPage() {
   const canPause = status?.status === 'running' || status?.status === 'queued';
   const canResume = status?.status === 'paused';
   const canCancel = status && ['running', 'queued', 'paused'].includes(status.status);
+  const canRetryFailed = (status?.failed_cases ?? 0) > 0;
 
   return (
     <div className="page-stack">
@@ -248,9 +249,9 @@ export function TaskDetailPage() {
                 继续
               </Button>
             ) : null}
-            {status?.status === 'failed' || status?.status === 'partially_failed' ? (
+            {canRetryFailed ? (
               <Button icon={<RedoOutlined />} loading={retryMutation.isPending} onClick={() => retryMutation.mutate()}>
-                重试失败用例
+                重试失败用例（{status?.failed_cases ?? 0}）
               </Button>
             ) : null}
             {canCancel ? (

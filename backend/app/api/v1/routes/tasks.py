@@ -24,9 +24,9 @@ from app.schemas import (
 from app.services import EvaluationResultService, StatisticsService, TaskExecutionService, TaskService, UnitOfWork
 from app.services.attack_strategies import StrategyConfigError, normalize_strategy
 from app.workers.queue import (
-    enqueue_failed_task_cases,
     enqueue_pending_task_cases,
     enqueue_task,
+    enqueue_task_case_ids,
 )
 
 router = APIRouter()
@@ -358,7 +358,7 @@ async def retry_failed_evaluation_cases(
     retry_case_ids = TaskExecutionService(uow).prepare_retry_failed(task_id)
     uow.commit()
     if retry_case_ids:
-        enqueue_failed_task_cases(task_id)
+        enqueue_task_case_ids(retry_case_ids)
     return ok(
         RetryFailedData(
             task_id=task.id,

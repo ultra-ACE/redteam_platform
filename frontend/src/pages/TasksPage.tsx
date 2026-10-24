@@ -243,6 +243,8 @@ export function TasksPage() {
   const canPause = (status: string) => status === 'running' || status === 'queued';
   const canResume = (status: string) => status === 'paused';
   const canCancel = (status: string) => ['running', 'queued', 'paused'].includes(status);
+  const canRetryFailed = (status: string, failedCases: number) =>
+    status !== 'draft' && failedCases > 0;
 
   return (
     <div className="page-stack">
@@ -303,7 +305,7 @@ export function TasksPage() {
           { title: '创建时间', dataIndex: 'created_at', width: 170, render: formatDateTime },
           {
             title: '操作',
-            width: 310,
+            width: 400,
             render: (_, record) => (
               <Space wrap>
                 <Button
@@ -343,14 +345,14 @@ export function TasksPage() {
                     继续
                   </Button>
                 ) : null}
-                {record.status === 'failed' || record.status === 'partially_failed' ? (
+                {canRetryFailed(record.status, record.failed_cases) ? (
                   <Button
                     type="link"
                     icon={<RedoOutlined />}
                     loading={retryMutation.isPending}
                     onClick={() => retryMutation.mutate(record.task_id)}
                   >
-                    重试失败
+                    重试失败（{record.failed_cases}）
                   </Button>
                 ) : null}
                 {canCancel(record.status) ? (

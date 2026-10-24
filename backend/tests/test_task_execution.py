@@ -125,7 +125,8 @@ def test_task_execution_with_multiple_mock_models() -> None:
         assert task.status == "succeeded"
 
 
-def test_prepare_retry_failed_only_resets_failed_cases() -> None:
+@pytest.mark.parametrize("task_status", ["running", "partially_failed"])
+def test_prepare_retry_failed_only_resets_failed_cases(task_status: str) -> None:
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
@@ -146,7 +147,7 @@ def test_prepare_retry_failed_only_resets_failed_cases() -> None:
         task.completed_cases = 1
         task.failed_cases = 1
         task.progress = 1.0
-        task.status = "partially_failed"
+        task.status = task_status
         session.commit()
 
         retry_ids = service.prepare_retry_failed(task_id)
