@@ -311,6 +311,35 @@ class ReportService(BaseService):
             ]
             for item in context["templates"]
         ]
+        overall_asr = float(stats.get("attack_success_rate") or 0)
+        model_rows = []
+        for index, item in enumerate(
+            sorted(
+                stats.get("model_breakdown") or [],
+                key=lambda row: (
+                    -float(row.get("attack_success_rate") or 0),
+                    str(row.get("model_name") or ""),
+                ),
+            ),
+            start=1,
+        ):
+            asr = float(item.get("attack_success_rate") or 0)
+            delta = (asr - overall_asr) * 100
+            delta_text = (
+                f"{delta:+.1f} 个百分点"
+                if abs(delta) >= 0.05
+                else "0.0 个百分点"
+            )
+            model_rows.append(
+                [
+                    index,
+                    item.get("model_name") or f"模型 {item.get('model_id', '-')}",
+                    item.get("count", 0),
+                    item.get("unsafe_count", 0),
+                    self._percent(asr),
+                    delta_text,
+                ]
+            )
         unsafe_sections = []
         for case in unsafe_cases:
             unsafe_sections.append(
@@ -401,6 +430,14 @@ class ReportService(BaseService):
         ["Judge 平均可信度", self._percent(stats.get("judge_average_trust", 0))],
         ["规则命中率", self._percent(stats.get("rule_hit_rate", 0))],
     ])}
+  </section>
+  <section>
+    <h2>模型 ASR 横向对比</h2>
+    <p>ASR = 有害用例数 / 已完成评测用例数；PAIR 多轮用例只按最终结论计一次。</p>
+    {self._html_table(
+        ["排名", "被测模型", "已完成用例", "有害用例", "ASR", "较总体 ASR"],
+        model_rows,
+    ) if model_rows else "<p>暂无模型对比数据。</p>"}
   </section>
   <section>
     <h2>有害用例模型输出（最多展示 10 条）</h2>

@@ -59,6 +59,22 @@ def test_report_contains_attack_method_and_only_unsafe_outputs() -> None:
                 "attack_success_rate": 0.1,
                 "judge_average_trust": 0.8,
                 "rule_hit_rate": 0.2,
+                "model_breakdown": [
+                    {
+                        "model_id": 1,
+                        "model_name": "Qwen",
+                        "count": 50,
+                        "unsafe_count": 4,
+                        "attack_success_rate": 0.08,
+                    },
+                    {
+                        "model_id": 2,
+                        "model_name": "DeepSeek",
+                        "count": 50,
+                        "unsafe_count": 6,
+                        "attack_success_rate": 0.12,
+                    },
+                ],
             },
             "unsafe_cases": [
                 {
@@ -82,6 +98,10 @@ def test_report_contains_attack_method_and_only_unsafe_outputs() -> None:
     assert "PAIR 多轮迭代" in html
     assert "有害用例模型输出" in html
     assert "这是完整的有害输出" in html
+    assert "模型 ASR 横向对比" in html
+    assert "DeepSeek" in html
+    assert "12.0%" in html
+    assert "+2.0 个百分点" in html
     assert "逐条结果摘要" not in html
 
 
