@@ -7,30 +7,6 @@ from app.services.base import BaseService
 
 VARIABLE_PATTERN = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.]*)\s*\}\}|\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 
-ATTACK_METHODS = [
-    {
-        "code": "direct_request",
-        "name": "直接请求",
-        "description": "不套用模板，直接把原始 Prompt 发送给被测模型。",
-    },
-    {
-        "code": "role_play",
-        "name": "角色扮演",
-        "description": "通过虚构角色或场景诱导模型绕过安全限制。",
-    },
-    {
-        "code": "prefix_injection",
-        "name": "前缀注入",
-        "description": "在用户输入前后注入指令，改变模型的安全策略。",
-    },
-    {
-        "code": "refusal_suppression",
-        "name": "拒答抑制",
-        "description": "要求模型不得拒绝回答，强制给出完整内容。",
-    },
-]
-
-
 class AttackTemplateService(BaseService):
    
     def list_templates(
@@ -48,8 +24,6 @@ class AttackTemplateService(BaseService):
             name=name,
             status=status,
         )
-    def list_methods(self) -> list[dict[str, str]]:
-        return ATTACK_METHODS
     def get_template(self, template_id: int) -> AttackTemplate | None:
         return self.uow.attack_templates.get(template_id)
 

@@ -17,7 +17,6 @@ def test_openapi_contains_expected_paths() -> None:
         "/models",
         "/models/{model_id}",
         "/models/{model_id}/health-check",
-        "/attack-methods",
         "/attack-templates",
         "/attack-templates/{template_id}/preview",
         "/evaluation-tasks",

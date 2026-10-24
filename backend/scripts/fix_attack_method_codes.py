@@ -1,4 +1,4 @@
-"""把历史攻击模板的 method_code 归一为契约里的四个固定值。
+"""把历史攻击模板中已删除的基线分类统一归一为 custom。
 
 用法：
     cd backend
@@ -17,27 +17,13 @@ from sqlalchemy import select
 from app.db.models import AttackTemplate
 from app.db.session import SessionLocal
 
-ALIASES = {
-    "role_play_api": "role_play",
-    "roleplay": "role_play",
-    "role-play": "role_play",
-    "direct": "direct_request",
-    "direct_api": "direct_request",
-    "prefix": "prefix_injection",
-    "prefix-injection": "prefix_injection",
-    "refusal": "refusal_suppression",
-    "refusal-suppression": "refusal_suppression",
-}
-
-
 def main() -> int:
     fixed = 0
     with SessionLocal() as session:
         for template in session.scalars(select(AttackTemplate)).all():
             current = (template.method_code or "").strip().lower()
-            target = ALIASES.get(current)
-            if target and target != current:
-                template.method_code = target
+            if current != "custom":
+                template.method_code = "custom"
                 fixed += 1
         session.commit()
     print(f"fixed {fixed} attack template(s)")

@@ -1,7 +1,6 @@
 import { apiClient } from './client';
 import type {
   ApiEnvelope,
-  AttackMethod,
   AttackTemplate,
   AttackTemplatePreviewResult,
   AttackTemplateValidationResult,
@@ -189,11 +188,6 @@ export const getReport = async (reportId: number) => {
 export const downloadReport = async (reportId: number) => {
   const response = await apiClient.get(`/reports/${reportId}/download`, { responseType: 'blob' });
   return response;
-};
-
-export const listAttackMethods = async () => {
-  const { data } = await apiClient.get<ApiEnvelope<PaginatedData<AttackMethod>>>('/attack-methods');
-  return data.data;
 };
 
 export const createAttackTemplate = async (payload: Record<string, unknown>) => {

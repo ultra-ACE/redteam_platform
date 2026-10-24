@@ -103,7 +103,7 @@ def test_expand_task_uses_selected_seeds() -> None:
             usage_scope="target",
         )
         template = AttackTemplate(
-            method_code="role_play",
+            method_code="custom",
             name="tpl",
             template_text="回答：{prompt}",
             variables=["prompt"],

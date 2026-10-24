@@ -1,6 +1,5 @@
 from .common import ApiResponse, ErrorResponse, PaginatedData
 from .domain import (
-    AttackMethod,
     AttackTemplate,
     AttemptDetail,
     Benchmark,
@@ -95,7 +94,6 @@ __all__ = [
     "TestCase",
     "Model",
     "HealthCheckData",
-    "AttackMethod",
     "AttackTemplate",
     "AttemptDetail",
     "JudgeDetail",

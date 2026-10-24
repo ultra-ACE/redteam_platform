@@ -37,7 +37,7 @@ def main() -> int:
             if not line:
                 continue
             record = json.loads(line)
-            method_code = record.get("method_code", "role_play")
+            method_code = "custom"
             name = record["name"]
             version = record.get("version", "v1")
             existing = uow.attack_templates.list(

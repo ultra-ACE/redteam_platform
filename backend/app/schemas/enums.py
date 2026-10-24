@@ -78,10 +78,6 @@ class ModelUsageScope(str, Enum):
 
 class AttackMethodCode(str, Enum):
     custom = "custom"
-    direct_request = "direct_request"
-    role_play = "role_play"
-    prefix_injection = "prefix_injection"
-    refusal_suppression = "refusal_suppression"
 
 
 class DatasetType(str, Enum):

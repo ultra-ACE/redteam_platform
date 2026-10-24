@@ -227,12 +227,6 @@ export type Report = {
   finished_at?: string | null;
 };
 
-export type AttackMethod = {
-  code: string;
-  name: string;
-  description?: string | null;
-};
-
 export type AttackTemplateValidationResult = {
   valid: boolean;
   detected_variables: string[];

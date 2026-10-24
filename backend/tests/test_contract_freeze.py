@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 import app.db.models  # noqa: F401
 from app.db.base import Base
 from app.db.models import EvaluationTask, ModelRegistry
-from app.schemas.enums import ReportFormat
+from app.schemas.enums import AttackMethodCode, ReportFormat
 from app.services.attack_templates import AttackTemplateService
 from app.services.domain import ModelService, TaskService
 from app.services.uow import UnitOfWork
@@ -32,17 +32,8 @@ def test_removed_tables_are_not_part_of_metadata() -> None:
     assert removed.isdisjoint(Base.metadata.tables)
 
 
-def test_contract_enums_and_fixed_attack_methods() -> None:
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        service = AttackTemplateService(UnitOfWork(session))
-        assert [item["code"] for item in service.list_methods()] == [
-            "direct_request",
-            "role_play",
-            "prefix_injection",
-            "refusal_suppression",
-        ]
+def test_contract_enums_keep_only_custom_template_method() -> None:
+    assert [item.value for item in AttackMethodCode] == ["custom"]
     assert [item.value for item in ReportFormat] == ["html"]
 
 
@@ -57,7 +48,7 @@ def test_legacy_attack_method_code_is_normalized() -> None:
             "template_text": "{prompt}",
         }
     )
-    assert template.method_code == "role_play"
+    assert template.method_code == "custom"
 
 
 def test_task_pause_and_resume_contract() -> None:

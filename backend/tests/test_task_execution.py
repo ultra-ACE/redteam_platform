@@ -580,7 +580,7 @@ def _make_model(session, label: str = "model") -> int:
 
 def _make_template(session, template_text: str = "{prompt}") -> int:
     template = AttackTemplate(
-        method_code="direct_request",
+        method_code="custom",
         name=_unique("tpl"),
         template_text=template_text,
         variables=["prompt"],
@@ -1167,7 +1167,7 @@ def _render_template_prompt_for_test(
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
         template = AttackTemplate(
-            method_code="direct_request",
+            method_code="custom",
             name=f"render-{uuid4().hex[:8]}",
             template_text=template_text,
             variables=[],
@@ -1194,7 +1194,7 @@ def _render_iterative_template_prompt_for_test(
     Base.metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
         template = AttackTemplate(
-            method_code="direct_request",
+            method_code="custom",
             name=f"pair-render-{uuid4().hex[:8]}",
             template_text=template_text,
             variables=[],

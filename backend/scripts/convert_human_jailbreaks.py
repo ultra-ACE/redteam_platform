@@ -41,15 +41,6 @@ def normalize(text: str) -> str:
     return normalized
 
 
-def classify(text: str) -> str:
-    lowered = text.lower()
-    if any(word in lowered for word in ("ignore all previous", "ignore previous", "ignore all the instructions")):
-        return "prefix_injection"
-    if any(word in lowered for word in ("never refuse", "do not refuse", "cannot refuse", "never say no")):
-        return "refusal_suppression"
-    return "role_play"
-
-
 def main() -> int:
     input_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_INPUT
     output_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("human_jailbreaks.jsonl")
@@ -59,7 +50,7 @@ def main() -> int:
         for index, item in enumerate(templates, start=1):
             record = {
                 "name": f"Human Jailbreak {index:03d}",
-                "method_code": classify(item),
+                "method_code": "custom",
                 "template_text": normalize(item),
                 "variables": ["prompt"],
                 "version": "v1",
