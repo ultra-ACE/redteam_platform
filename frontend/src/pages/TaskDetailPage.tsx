@@ -30,6 +30,7 @@ const TERMINAL_TASK_STATUSES = new Set(['succeeded', 'partially_failed', 'failed
 
 type ResultGroup = {
   task_case_id: number;
+  case_no?: number | null;
   external_id?: string | null;
   attack_template_id?: number | null;
   attack_strategy?: string | null;
@@ -51,6 +52,7 @@ function groupResultsByCase(items: EvaluationResult[]): ResultGroup[] {
     }
     groups.set(key, {
       task_case_id: key,
+      case_no: item.case_no,
       external_id: item.external_id,
       attack_template_id: item.attack_template_id,
       attack_strategy: item.attack_strategy,
@@ -80,11 +82,7 @@ function groupResultsByCase(items: EvaluationResult[]): ResultGroup[] {
           .map(([, attempt]) => attempt),
       };
     })
-    .sort((left, right) => {
-      const leftId = left.roundAttempts[left.roundAttempts.length - 1]?.attempt_id ?? 0;
-      const rightId = right.roundAttempts[right.roundAttempts.length - 1]?.attempt_id ?? 0;
-      return rightId - leftId;
-    });
+    .sort((left, right) => (left.case_no ?? 0) - (right.case_no ?? 0));
 }
 
 export function TaskDetailPage() {
@@ -407,7 +405,11 @@ export function TaskDetailPage() {
                       </Tag>
                     ),
                   },
-                  { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
+                  {
+                    title: '本次尝试',
+                    width: 100,
+                    render: (_, attempt) => `第 ${attempt.attempt_no} 次`,
+                  },
                   {
                     title: '本轮 Prompt',
                     dataIndex: 'prompt_excerpt',
@@ -439,7 +441,13 @@ export function TaskDetailPage() {
             ),
           }}
           columns={[
-            { title: '用例 ID', dataIndex: 'task_case_id', width: 90 },
+            {
+              title: '用例序号',
+              dataIndex: 'case_no',
+              width: 100,
+              render: (value: number | null | undefined) =>
+                value ? `#${value}` : '-',
+            },
             {
               title: '来源编号',
               dataIndex: 'external_id',

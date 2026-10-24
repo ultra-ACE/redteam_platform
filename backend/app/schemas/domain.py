@@ -216,6 +216,7 @@ class TaskStatusData(ORMSchema):
 class EvaluationResult(ORMSchema):
     attempt_id: int = Field(validation_alias=AliasChoices("attempt_id", "id"), serialization_alias="attempt_id")
     task_case_id: int | None = None
+    case_no: int | None = None
     test_case_id: int | None = None
     external_id: str | None = None
     model_id: int
@@ -250,6 +251,12 @@ class JudgeTrustSummary(ORMSchema):
 class ManualReview(ORMSchema):
     review_id: int = Field(validation_alias=AliasChoices("review_id", "id"), serialization_alias="review_id")
     task_attempt_id: int
+    task_id: int | None = None
+    task_case_id: int | None = None
+    case_no: int | None = None
+    attempt_no: int | None = None
+    round_no: int | None = None
+    external_id: str | None = None
     trigger_reason: str
     status: ReviewStatus
     decision: ReviewDecision | None = None
@@ -260,9 +267,7 @@ class ManualReview(ORMSchema):
 
 
 class ManualReviewDetail(ManualReview):
-    task_id: int | None = None
     test_case_id: int | None = None
-    external_id: str | None = None
     prompt: str | None = None
     model_output: str | None = None
     judge_verdict: str | None = None
@@ -302,6 +307,7 @@ class AttemptDetail(ORMSchema):
     attempt_id: int
     task_id: int | None = None
     task_case_id: int
+    case_no: int | None = None
     test_case_id: int | None = None
     external_id: str | None = None
     model_id: int

@@ -180,6 +180,7 @@ export type TaskStatusData = {
 export type EvaluationResult = {
   attempt_id: number;
   task_case_id?: number | null;
+  case_no?: number | null;
   test_case_id?: number | null;
   external_id?: string | null;
   model_id: number;
@@ -279,6 +280,12 @@ export type JudgeReEvaluateResult = {
 export type ManualReview = {
   review_id: number;
   task_attempt_id: number;
+  task_id?: number | null;
+  task_case_id?: number | null;
+  case_no?: number | null;
+  attempt_no?: number | null;
+  round_no?: number | null;
+  external_id?: string | null;
   trigger_reason: string;
   status: string;
   decision?: string | null;
@@ -289,9 +296,7 @@ export type ManualReview = {
 };
 
 export type ManualReviewDetail = ManualReview & {
-  task_id?: number | null;
   test_case_id?: number | null;
-  external_id?: string | null;
   prompt?: string | null;
   model_output?: string | null;
   judge_verdict?: string | null;
@@ -340,6 +345,7 @@ export type AttemptDetail = {
   attempt_id: number;
   task_id?: number | null;
   task_case_id: number;
+  case_no?: number | null;
   test_case_id?: number | null;
   external_id?: string | null;
   model_id: number;

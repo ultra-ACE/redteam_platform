@@ -20,9 +20,12 @@ export function ResultsPage() {
   const normalized = keyword.trim().toLowerCase();
   const filtered = normalized
     ? items.filter((item) =>
-        [item.external_id, item.prompt_excerpt, String(item.attempt_id)].some((value) =>
-          (value ?? '').toLowerCase().includes(normalized),
-        ),
+        [
+          item.external_id,
+          item.prompt_excerpt,
+          String(item.case_no ?? ''),
+          String(item.round_no ?? item.attempt_no),
+        ].some((value) => (value ?? '').toLowerCase().includes(normalized)),
       )
     : items;
 
@@ -45,7 +48,7 @@ export function ResultsPage() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="按来源编号 / 尝试 ID / 提示词筛选"
+              placeholder="按用例序号 / 来源编号 / 轮次筛选"
               style={{ width: 280 }}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -65,7 +68,13 @@ export function ResultsPage() {
             style: { cursor: 'pointer' },
           })}
           columns={[
-            { title: '尝试 ID', dataIndex: 'attempt_id', width: 100 },
+            {
+              title: '用例序号',
+              dataIndex: 'case_no',
+              width: 100,
+              render: (value: number | null | undefined) =>
+                value ? `#${value}` : '-',
+            },
             {
               title: '来源编号',
               dataIndex: 'external_id',
@@ -77,6 +86,14 @@ export function ResultsPage() {
               dataIndex: 'prompt_excerpt',
               ellipsis: { showTitle: true },
               render: (value: string | null | undefined) => value || '-',
+            },
+            {
+              title: '轮次',
+              width: 100,
+              render: (_, record) =>
+                record.round_no
+                  ? `第 ${record.round_no} 轮`
+                  : `第 ${record.attempt_no} 次`,
             },
             { title: '模型 ID', dataIndex: 'model_id', width: 90 },
             { title: '数据集类型', dataIndex: 'dataset_type', width: 120, render: (value) => value || '-' },

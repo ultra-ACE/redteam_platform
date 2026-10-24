@@ -3,9 +3,10 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from app.db.models import JudgeResult, ManualReview, RuleValidationResult, TaskAttempt, TaskCase
-from app.schemas import ManualReviewDetail
+from app.db.models import JudgeResult, ManualReview, RuleValidationResult, TaskAttempt, TaskCase, TestCase
+from app.schemas import ManualReview as ManualReviewSchema, ManualReviewDetail
 from app.services.base import BaseService
+from app.services.case_numbering import case_number_map
 
 
 class ManualReviewService(BaseService):
@@ -20,7 +21,7 @@ class ManualReviewService(BaseService):
         trigger_reason: str | None = None,
         task_id: int | None = None,
         task_attempt_id: int | None = None,
-    ) -> tuple[list[ManualReview], int]:
+    ) -> tuple[list[ManualReviewSchema], int]:
         stmt = select(ManualReview)
         if status:
             stmt = stmt.where(ManualReview.status == status)
@@ -35,11 +36,77 @@ class ManualReviewService(BaseService):
                 .where(TaskCase.task_id == task_id)
             )
         total = int(self.uow.session.scalar(select(func.count()).select_from(stmt.subquery())) or 0)
-        items = list(
+        entities = list(
             self.uow.session.scalars(
                 stmt.order_by(ManualReview.id.desc()).offset((page - 1) * page_size).limit(page_size)
             ).all()
         )
+        attempt_ids = {item.task_attempt_id for item in entities}
+        attempts = (
+            list(
+                self.uow.session.scalars(
+                    select(TaskAttempt).where(TaskAttempt.id.in_(attempt_ids))
+                ).all()
+            )
+            if attempt_ids
+            else []
+        )
+        attempts_by_id = {attempt.id: attempt for attempt in attempts}
+        task_case_ids = {attempt.task_case_id for attempt in attempts}
+        task_cases = (
+            list(
+                self.uow.session.scalars(
+                    select(TaskCase).where(TaskCase.id.in_(task_case_ids))
+                ).all()
+            )
+            if task_case_ids
+            else []
+        )
+        task_cases_by_id = {task_case.id: task_case for task_case in task_cases}
+        numbers = case_number_map(
+            self.uow.session,
+            {task_case.task_id for task_case in task_cases},
+        )
+        test_case_ids = {task_case.test_case_id for task_case in task_cases}
+        test_cases = (
+            list(
+                self.uow.session.scalars(
+                    select(TestCase).where(TestCase.id.in_(test_case_ids))
+                ).all()
+            )
+            if test_case_ids
+            else []
+        )
+        test_cases_by_id = {test_case.id: test_case for test_case in test_cases}
+
+        items = []
+        for review in entities:
+            attempt = attempts_by_id.get(review.task_attempt_id)
+            task_case = task_cases_by_id.get(attempt.task_case_id) if attempt else None
+            test_case = test_cases_by_id.get(task_case.test_case_id) if task_case else None
+            items.append(
+                ManualReviewSchema(
+                    review_id=review.id,
+                    task_attempt_id=review.task_attempt_id,
+                    task_id=task_case.task_id if task_case else None,
+                    task_case_id=task_case.id if task_case else None,
+                    case_no=(
+                        numbers.get(task_case.task_id, {}).get(task_case.id)
+                        if task_case
+                        else None
+                    ),
+                    attempt_no=attempt.attempt_no if attempt else None,
+                    round_no=self._round_no(attempt) if attempt else None,
+                    external_id=test_case.external_id if test_case else None,
+                    trigger_reason=review.trigger_reason,
+                    status=review.status,
+                    decision=review.decision,
+                    corrected_verdict=review.corrected_verdict,
+                    comment=review.comment,
+                    reviewer=review.reviewer,
+                    reviewed_at=review.reviewed_at,
+                )
+            )
         return items, total
 
     def get_review(self, review_id: int) -> ManualReview | None:
@@ -192,6 +259,13 @@ class ManualReviewService(BaseService):
         attempt = self.uow.task_attempts.get(review.task_attempt_id)
         task_case = self.uow.task_cases.get(attempt.task_case_id) if attempt else None
         test_case = self.uow.test_cases.get(task_case.test_case_id) if task_case else None
+        case_no = (
+            case_number_map(self.uow.session, [task_case.task_id])
+            .get(task_case.task_id, {})
+            .get(task_case.id)
+            if task_case
+            else None
+        )
         rendered_prompt = (
             str((attempt.input_snapshot or {}).get("prompt"))
             if attempt is not None and (attempt.input_snapshot or {}).get("prompt")
@@ -221,6 +295,11 @@ class ManualReviewService(BaseService):
         return ManualReviewDetail(
             review_id=review.id,
             task_attempt_id=review.task_attempt_id,
+            task_case_id=task_case.id if task_case else None,
+            case_no=case_no,
+            attempt_no=attempt.attempt_no if attempt else None,
+            round_no=self._round_no(attempt) if attempt else None,
+            external_id=test_case.external_id if test_case else None,
             trigger_reason=review.trigger_reason,
             status=review.status,
             decision=review.decision,
@@ -230,7 +309,6 @@ class ManualReviewService(BaseService):
             reviewed_at=review.reviewed_at,
             task_id=task_case.task_id if task_case else None,
             test_case_id=test_case.id if test_case else None,
-            external_id=test_case.external_id if test_case else None,
             prompt=rendered_prompt,
             model_output=attempt.output_text if attempt else None,
             judge_verdict=judge_result.verdict if judge_result else None,
@@ -239,3 +317,11 @@ class ManualReviewService(BaseService):
             rule_hits=sum(item.hit_count for item in rules),
             rule_highest_severity=highest_severity,
         )
+
+    @staticmethod
+    def _round_no(attempt: TaskAttempt) -> int | None:
+        value = (attempt.input_snapshot or {}).get("round_no")
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None

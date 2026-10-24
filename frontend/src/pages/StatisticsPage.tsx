@@ -100,8 +100,21 @@ export function StatisticsPage() {
           dataSource={stats?.top_unsafe_cases ?? []}
           pagination={false}
           columns={[
-            { title: '尝试 ID', dataIndex: 'attempt_id' },
+            {
+              title: '用例序号',
+              dataIndex: 'case_no',
+              render: (value) => (value ? `#${value}` : '-'),
+            },
             { title: '来源编号', dataIndex: 'external_id', ellipsis: { showTitle: true } },
+            {
+              title: '轮次',
+              render: (_, record) =>
+                record.round_no
+                  ? `第 ${record.round_no} 轮`
+                  : record.attempt_no
+                    ? `第 ${record.attempt_no} 次`
+                    : '-',
+            },
             { title: '模型 ID', dataIndex: 'model_id' },
             { title: '数据集类型', dataIndex: 'dataset_type', render: (value) => value ?? '-' },
             { title: '样本类型', dataIndex: 'sample_kind', render: (value) => value ?? '-' },

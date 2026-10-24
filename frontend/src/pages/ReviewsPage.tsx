@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { CheckCircleOutlined, EyeOutlined, ReloadOutlined, SearchOutlined, ToolOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Descriptions, Form, Input, Modal, Select, Space, Table, Tabs, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { backfillManualReviews, createManualReview, getManualReview, listManualReviews } from '../api';
+import { backfillManualReviews, createManualReview, getManualReview, listManualReviews, listTasks } from '../api';
 import { EmptyPanel, PageHeader } from '../components/ui';
 import type { ManualReview, ManualReviewDetail } from '../types/api';
 import { formatDateTime, formatPercent, shortenId } from '../utils/format';
@@ -12,15 +12,33 @@ export function ReviewsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<ManualReviewDetail | null>(null);
   const [keyword, setKeyword] = useState('');
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
-  const reviewsQuery = useQuery({ queryKey: ['manual-reviews'], queryFn: () => listManualReviews({ page_size: 2000 }) });
+  const tasksQuery = useQuery({
+    queryKey: ['manual-review-tasks'],
+    queryFn: () => listTasks({ page: 1, page_size: 200 }),
+  });
+  const reviewsQuery = useQuery({
+    queryKey: ['manual-reviews', selectedTaskId ?? 'all'],
+    queryFn: () =>
+      listManualReviews({
+        page_size: 2000,
+        task_id: selectedTaskId ?? undefined,
+      }),
+  });
   const pendingSummaryQuery = useQuery({
-    queryKey: ['manual-reviews', 'pending-summary'],
-    queryFn: () => listManualReviews({ page: 1, page_size: 1, status: 'pending' }),
+    queryKey: ['manual-reviews', 'pending-summary', selectedTaskId ?? 'all'],
+    queryFn: () =>
+      listManualReviews({
+        page: 1,
+        page_size: 1,
+        status: 'pending',
+        task_id: selectedTaskId ?? undefined,
+      }),
   });
   const backfillMutation = useMutation({
-    mutationFn: () => backfillManualReviews(),
+    mutationFn: (taskId?: number) => backfillManualReviews(taskId),
     onSuccess: (result) => {
       message.success(`已扫描 ${result.scanned} 个尝试，补建 ${result.created} 条复核记录`);
       queryClient.invalidateQueries({ queryKey: ['manual-reviews'] });
@@ -61,12 +79,18 @@ export function ReviewsPage() {
   });
 
   const reviews = reviewsQuery.data?.items ?? [];
+  const tasks = tasksQuery.data?.items ?? [];
+  const tasksById = new Map(tasks.map((task) => [task.task_id, task]));
+  const selectedTask = selectedTaskId ? tasksById.get(selectedTaskId) : undefined;
   const normalizedKeyword = keyword.trim().toLowerCase();
   const matchedReviews = normalizedKeyword
     ? reviews.filter((item) =>
         [
-          String(item.review_id),
-          String(item.task_attempt_id),
+          String(item.case_no ?? ''),
+          item.external_id,
+          String(item.round_no ?? item.attempt_no ?? ''),
+          String(item.task_id ?? ''),
+          tasksById.get(item.task_id ?? -1)?.name,
           item.trigger_reason,
           item.status,
           item.reviewer,
@@ -83,8 +107,40 @@ export function ReviewsPage() {
       dataSource={data}
       pagination={{ pageSize: 10 }}
       columns={[
-        { title: '复核 ID', dataIndex: 'review_id', width: 100 },
-        { title: '尝试 ID', dataIndex: 'task_attempt_id', width: 100 },
+        {
+          title: '评测任务',
+          dataIndex: 'task_id',
+          width: 220,
+          ellipsis: { showTitle: true },
+          render: (value?: number | null) => {
+            if (!value) return '-';
+            const task = tasksById.get(value);
+            return task ? `${task.name} · #${task.task_id}` : `任务 #${value}`;
+          },
+        },
+        {
+          title: '用例序号',
+          dataIndex: 'case_no',
+          width: 100,
+          render: (value) => (value ? `#${value}` : '-'),
+        },
+        {
+          title: '来源编号',
+          dataIndex: 'external_id',
+          width: 220,
+          ellipsis: { showTitle: true },
+          render: (value) => value || '-',
+        },
+        {
+          title: '轮次',
+          width: 100,
+          render: (_, record) =>
+            record.round_no
+              ? `第 ${record.round_no} 轮`
+              : record.attempt_no
+                ? `第 ${record.attempt_no} 次`
+                : '-',
+        },
         { title: '触发原因', dataIndex: 'trigger_reason', render: (value) => <Tag color="orange">{value}</Tag> },
         { title: '状态', dataIndex: 'status', width: 120, render: (value) => <Tag color={value === 'pending' ? 'warning' : 'success'}>{value}</Tag> },
         ...(showDecision
@@ -118,7 +174,7 @@ export function ReviewsPage() {
             <Input
               allowClear
               prefix={<SearchOutlined />}
-              placeholder="按复核 ID / 尝试 ID / 触发原因搜索"
+              placeholder="按用例序号 / 来源编号 / 轮次搜索"
               style={{ width: 320 }}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -129,13 +185,40 @@ export function ReviewsPage() {
             <Button
               icon={<ToolOutlined />}
               loading={backfillMutation.isPending}
-              onClick={() => backfillMutation.mutate()}
+              onClick={() => backfillMutation.mutate(selectedTaskId ?? undefined)}
             >
-              补建历史复核
+              {selectedTaskId ? '补建当前任务复核' : '补建历史复核'}
             </Button>
           </Space>
         }
       />
+
+      <Card className="section-card" size="small">
+        <Space wrap>
+          <Select
+            showSearch
+            allowClear
+            loading={tasksQuery.isLoading}
+            placeholder="全部评测任务"
+            optionFilterProp="label"
+            style={{ width: 420 }}
+            value={selectedTaskId ?? undefined}
+            onChange={(value) => setSelectedTaskId(value ?? null)}
+            options={tasks.map((task) => ({
+              value: task.task_id,
+              label: `${task.name} · #${task.task_id} · ${task.status}`,
+            }))}
+          />
+          {selectedTask ? (
+            <Tag color="blue">
+              当前任务：{selectedTask.name} · #{selectedTask.task_id}
+            </Tag>
+          ) : (
+            <Tag>全部评测任务</Tag>
+          )}
+          <Tag color="orange">待复核 {pendingTotal} 条</Tag>
+        </Space>
+      </Card>
 
       <Tabs
         items={[
@@ -153,7 +236,7 @@ export function ReviewsPage() {
       />
 
       <Modal
-        title={`复核详情 · #${detail?.review_id ?? ''}`}
+        title={`复核详情 · 用例 ${detail?.case_no ? `#${detail.case_no}` : '-'}`}
         open={detailOpen}
         width={880}
         onCancel={() => setDetailOpen(false)}
@@ -169,11 +252,24 @@ export function ReviewsPage() {
               description="请结合模型输出、Judge 判断和规则命中给出复核结论。"
             />
             <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="尝试 ID">{detail.task_attempt_id}</Descriptions.Item>
-              <Descriptions.Item label="用例编号">{detail.test_case_id ?? '-'}</Descriptions.Item>
+              <Descriptions.Item label="评测任务">
+                {detail.task_id
+                  ? tasksById.get(detail.task_id)?.name ??
+                    `任务 #${detail.task_id}`
+                  : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="用例序号">
+                {detail.case_no ? `#${detail.case_no}` : '-'}
+              </Descriptions.Item>
               <Descriptions.Item label="来源编号">
                 <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="轮次">
+                {detail.round_no
+                  ? `第 ${detail.round_no} 轮`
+                  : detail.attempt_no
+                    ? `第 ${detail.attempt_no} 次`
+                    : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Judge 判断">
                 {detail.judge_verdict ?? '-'} / 置信度 {formatPercent(detail.judge_confidence)} / 可信度 {formatPercent(detail.judge_trust_score)}

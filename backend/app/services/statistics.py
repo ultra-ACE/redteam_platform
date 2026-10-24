@@ -84,6 +84,9 @@ class StatisticsService(BaseService):
         top_unsafe_cases = [
             {
                 "attempt_id": item.attempt_id,
+                "case_no": getattr(item, "case_no", None),
+                "round_no": getattr(item, "round_no", None),
+                "attempt_no": getattr(item, "attempt_no", None),
                 "external_id": item.external_id,
                 "model_id": item.model_id,
                 "attack_template_id": item.attack_template_id,

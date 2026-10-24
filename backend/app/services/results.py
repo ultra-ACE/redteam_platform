@@ -12,6 +12,7 @@ from app.schemas import (
     RuleValidationSummary,
 )
 from app.services.base import BaseService
+from app.services.case_numbering import case_number_map
 
 
 class EvaluationResultService(BaseService):
@@ -56,7 +57,16 @@ class EvaluationResultService(BaseService):
             .order_by(TaskAttempt.id.desc())
         )
         rows = self.uow.session.execute(stmt).all()
-        items = [self._build_result(attempt, task_case, test_case) for attempt, task_case, test_case in rows]
+        numbers = case_number_map(self.uow.session, [task_id]).get(task_id, {})
+        items = [
+            self._build_result(
+                attempt,
+                task_case,
+                test_case,
+                case_no=numbers.get(task_case.id),
+            )
+            for attempt, task_case, test_case in rows
+        ]
         return self._apply_filters(
             items,
             model_id=model_id,
@@ -69,6 +79,8 @@ class EvaluationResultService(BaseService):
         attempt: TaskAttempt,
         task_case: TaskCase,
         test_case: TestCase,
+        *,
+        case_no: int | None,
     ) -> EvaluationResult:
         judge_result = self._latest_judge_result(attempt.id)
         rule_results = self.uow.rule_validation_results.list(
@@ -91,6 +103,7 @@ class EvaluationResultService(BaseService):
         return EvaluationResult(
             attempt_id=attempt.id,
             task_case_id=task_case.id,
+            case_no=case_no,
             test_case_id=test_case.id,
             external_id=test_case.external_id,
             model_id=attempt.model_id,
@@ -120,6 +133,11 @@ class EvaluationResultService(BaseService):
         snapshot = attempt.input_snapshot or {}
         test_case = self.uow.test_cases.get(task_case.test_case_id) if task_case else None
         model = self.uow.models.get(attempt.model_id)
+        numbers = (
+            case_number_map(self.uow.session, [task_case.task_id]).get(task_case.task_id, {})
+            if task_case is not None
+            else {}
+        )
         template = (
             self.uow.attack_templates.get(task_case.attack_template_id)
             if task_case is not None and task_case.attack_template_id
@@ -130,6 +148,7 @@ class EvaluationResultService(BaseService):
             attempt_id=attempt.id,
             task_id=task_case.task_id if task_case else None,
             task_case_id=attempt.task_case_id,
+            case_no=numbers.get(attempt.task_case_id),
             test_case_id=test_case.id if test_case else None,
             external_id=test_case.external_id if test_case else None,
             model_id=attempt.model_id,

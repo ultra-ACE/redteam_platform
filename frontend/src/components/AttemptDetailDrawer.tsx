@@ -71,6 +71,9 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
             <Descriptions.Item label="来源编号">
               <span title={detail.external_id ?? ''}>{shortenId(detail.external_id)}</span>
             </Descriptions.Item>
+            <Descriptions.Item label="用例序号">
+              {detail.case_no ? `#${detail.case_no}` : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label="任务 ID">{detail.task_id ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="数据集类型">{detail.dataset_type ?? '-'}</Descriptions.Item>
             <Descriptions.Item label="样本类型">{detail.sample_kind ?? '-'}</Descriptions.Item>
@@ -82,7 +85,7 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
               {detail.round_no ? <Tag color="purple">第 {detail.round_no} 轮</Tag> : '-'}
             </Descriptions.Item>
             <Descriptions.Item label="攻击方式">{detail.attack_strategy ?? '-'}</Descriptions.Item>
-            <Descriptions.Item label="尝试序号">#{detail.attempt_no}</Descriptions.Item>
+            <Descriptions.Item label="本次尝试">第 {detail.attempt_no} 次</Descriptions.Item>
             <Descriptions.Item label="执行状态"><Tag>{detail.status}</Tag></Descriptions.Item>
             <Descriptions.Item label="耗时">
               {detail.latency_ms === null || detail.latency_ms === undefined ? '-' : `${detail.latency_ms} ms`}
@@ -200,7 +203,12 @@ export function AttemptDetailDrawer(props: { attemptId: number | null; onClose: 
           <Card size="small" title="人工复核">
             {detail.manual_review ? (
               <Descriptions column={2} size="small">
-                <Descriptions.Item label="复核 ID">#{detail.manual_review.review_id}</Descriptions.Item>
+                <Descriptions.Item label="对应用例">
+                  {detail.case_no ? `#${detail.case_no}` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="对应轮次">
+                  {detail.round_no ? `第 ${detail.round_no} 轮` : '-'}
+                </Descriptions.Item>
                 <Descriptions.Item label="触发原因">{detail.manual_review.trigger_reason}</Descriptions.Item>
                 <Descriptions.Item label="状态">{detail.manual_review.status}</Descriptions.Item>
                 <Descriptions.Item label="结论">{detail.manual_review.decision ?? '-'}</Descriptions.Item>
